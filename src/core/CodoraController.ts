@@ -4,6 +4,7 @@ import * as path from 'path';
 import { StorageManager } from './storage/StorageManager';
 import { extractFunctions } from './context/CodeContextExtractor';
 import { SessionManager } from './session/SessionManager';
+import { resolveIntervalMs } from './session/resolveIntervalMs';
 import { QuestionEngine } from './questions/QuestionEngine';
 import { questionFingerprint } from './questions/questionFingerprint';
 import { DeterministicEvaluator, isShallowFreeTextAnswer, type Evaluator } from './scoring/Evaluator';
@@ -61,7 +62,7 @@ export class CodoraController implements vscode.Disposable {
     this.evaluator = new HybridEvaluator(this.deterministicEvaluator, () => this.activeAIProvider);
     this.sessionManager = new SessionManager(workspaceFolder, {
       onChallengeReady,
-      getChallengeInterval: () => this.storage.getGlobalProfile().settings.challengeInterval,
+      getChallengeIntervalMs: () => resolveIntervalMs(this.storage.getGlobalProfile().settings),
       isPaused: () => this.isPaused(),
     });
   }

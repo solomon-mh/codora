@@ -3,25 +3,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { newId } from '../../utils/id';
 import { languageFromExtension } from '../context/WorkspaceAnalyzer';
-import type { ChallengeInterval } from '../storage/StorageSchema';
 import type { LiveSessionState, SessionRecord } from './SessionState';
 import { getLogger } from '../../utils/logger';
 
 const TICK_MS = 15_000;
 const IDLE_GAP_MS = 2 * 60_000;
 
-const INTERVAL_MS: Record<Exclude<ChallengeInterval, 'off' | 'adaptive'>, number> = {
-  '10min': 10 * 60_000,
-  '30min': 30 * 60_000,
-  '1hour': 60 * 60_000,
-};
-
-/** Adaptive is a real but deliberately simple first pass (spec section 10/13/31). */
-const ADAPTIVE_DEFAULT_MS = 25 * 60_000;
-
 export interface SessionManagerCallbacks {
   onChallengeReady: () => void;
-  getChallengeInterval: () => ChallengeInterval;
+  /** Resolved threshold in ms for the current settings, or null for "off" (never fire) — see resolveIntervalMs. */
+  getChallengeIntervalMs: () => number | null;
   isPaused: () => boolean;
 }
 
@@ -158,10 +149,9 @@ export class SessionManager implements vscode.Disposable {
 
   private maybeFireChallenge(): void {
     if (!this.live || this.callbacks.isPaused()) return;
-    const interval = this.callbacks.getChallengeInterval();
-    if (interval === 'off') return;
+    const thresholdMs = this.callbacks.getChallengeIntervalMs();
+    if (thresholdMs === null) return;
 
-    const thresholdMs = interval === 'adaptive' ? ADAPTIVE_DEFAULT_MS : INTERVAL_MS[interval];
     if (this.live.msSinceLastChallenge >= thresholdMs) {
       this.live.msSinceLastChallenge = 0;
       this.callbacks.onChallengeReady();

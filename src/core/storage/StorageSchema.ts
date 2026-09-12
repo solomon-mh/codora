@@ -4,13 +4,15 @@ import type { SessionRecord } from '../session/SessionState';
 
 export const SCHEMA_VERSION = 1;
 
-export type ChallengeInterval = '10min' | '30min' | '1hour' | 'adaptive' | 'off';
+export type ChallengeInterval = '10min' | '30min' | '1hour' | 'custom' | 'adaptive' | 'off';
 export type DifficultySetting = 'adaptive' | 'easy' | 'medium' | 'hard';
 export type AnthropicModel = 'claude-haiku-4-5' | 'claude-sonnet-5' | 'claude-opus-5';
 export type OpenAIModel = 'gpt-4o-mini' | 'gpt-4o';
 
 export interface CodoraSettings {
   challengeInterval: ChallengeInterval;
+  /** Minutes between challenges when challengeInterval is 'custom'. */
+  customIntervalMinutes: number;
   difficulty: DifficultySetting;
   categories: string[];
   notifications: {
@@ -75,6 +77,7 @@ export interface ProjectData {
 export function defaultSettings(): CodoraSettings {
   return {
     challengeInterval: '30min',
+    customIntervalMinutes: 30,
     difficulty: 'adaptive',
     categories: ['recall', 'reasoning', 'debugging', 'architecture', 'testing', 'security', 'performance'],
     notifications: { challenge: true, dailyProgress: true, weeklySummary: true },

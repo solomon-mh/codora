@@ -81,11 +81,18 @@
             "10min",
             "30min",
             "1hour",
+            "custom",
             "adaptive",
             "off"
           ],
           "default": "30min",
           "description": "How often (in active coding time) Codora offers a comprehension challenge."
+        },
+        "codora.challengeIntervalCustomMinutes": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Minutes between challenges when codora.challengeInterval is \"custom\"."
         },
         "codora.difficulty": {
           "type": "string",

@@ -1,7 +1,7 @@
 import type { CodoraSettings } from '../../../src/core/storage/StorageSchema';
 import type { AIStatus } from '../../../src/core/ai/AIProviderResolver';
 
-const INTERVAL_OPTIONS: CodoraSettings['challengeInterval'][] = ['10min', '30min', '1hour', 'adaptive', 'off'];
+const INTERVAL_OPTIONS: CodoraSettings['challengeInterval'][] = ['10min', '30min', '1hour', 'custom', 'adaptive', 'off'];
 const DIFFICULTY_OPTIONS: CodoraSettings['difficulty'][] = ['adaptive', 'easy', 'medium', 'hard'];
 const ALL_CATEGORIES = ['recall', 'reasoning', 'debugging', 'architecture', 'testing', 'security', 'performance'];
 
@@ -30,13 +30,33 @@ export function SettingsPanel({
       <div className="codora-card">
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Challenge interval</div>
         {INTERVAL_OPTIONS.map((opt) => (
-          <label key={opt} style={{ display: 'block', marginBottom: 6, cursor: 'pointer' }}>
+          <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, cursor: 'pointer' }}>
             <input
               type="radio"
               checked={settings.challengeInterval === opt}
               onChange={() => onChange({ challengeInterval: opt })}
-            />{' '}
+            />
             {intervalLabel(opt)}
+            {opt === 'custom' && settings.challengeInterval === 'custom' && (
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  value={settings.customIntervalMinutes}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onChange({ customIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })}
+                  style={{
+                    width: 56,
+                    background: 'var(--codora-card-bg)',
+                    color: 'var(--codora-fg)',
+                    border: '1px solid var(--codora-border)',
+                    borderRadius: 4,
+                    padding: '2px 6px',
+                  }}
+                />
+                <span className="codora-muted">minutes</span>
+              </>
+            )}
           </label>
         ))}
       </div>
@@ -126,6 +146,7 @@ function intervalLabel(opt: CodoraSettings['challengeInterval']): string {
     case '10min': return '10 minutes';
     case '30min': return '30 minutes';
     case '1hour': return '1 hour';
+    case 'custom': return 'Custom:';
     case 'adaptive': return 'Adaptive';
     case 'off': return 'Off';
   }
