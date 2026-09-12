@@ -12,6 +12,7 @@ import { getLogger } from '../../utils/logger';
 import { tryGenerateAIQuestion } from './AIQuestionGenerator';
 import type { AIProvider } from '../ai/AITypes';
 import { pickDifficulty } from './QuestionDifficulty';
+import { questionFingerprint } from './questionFingerprint';
 
 const MAX_FILE_READ_BYTES = 200_000;
 
@@ -22,6 +23,15 @@ export interface GenerateChallengeOptions {
   staleSubjectFiles: Set<string>;
   /** When set, each (type, candidate) pair is tried via AI first, falling back to the deterministic template on any failure. */
   aiProvider?: AIProvider;
+  /** Fingerprints of recently-asked (type, file, function) combos — avoided on a first pass so the same question doesn't repeat while other candidates exist. */
+  recentFingerprints?: Set<string>;
+}
+
+interface CandidateFile {
+  file: FileContext;
+  fn?: import('../context/CodeContextExtractor').FunctionInfo;
+  testFile?: FileContext;
+  commitMessage: string | null;
 }
 
 export class QuestionEngine {
@@ -37,6 +47,28 @@ export class QuestionEngine {
 
     const categoryOrder = weightedCategoryOrder(options.enabledCategories, options.categoryScores);
 
+    // First pass avoids repeating anything asked recently, so variety comes
+    // from trying other categories/types/files first. If that leaves
+    // nothing (e.g. only one file/function is actually being worked on),
+    // a second pass allows repeats rather than silently skipping the
+    // challenge — a repeat is better than nothing firing at all.
+    const firstPass = await this.tryAllCombos(candidates, categoryOrder, options, options.recentFingerprints);
+    if (firstPass) return firstPass;
+    if (options.recentFingerprints && options.recentFingerprints.size > 0) {
+      const secondPass = await this.tryAllCombos(candidates, categoryOrder, options, undefined);
+      if (secondPass) return secondPass;
+    }
+
+    getLogger().info('No template produced a confident question — skipping challenge');
+    return undefined;
+  }
+
+  private async tryAllCombos(
+    candidates: CandidateFile[],
+    categoryOrder: ChallengeCategory[],
+    options: GenerateChallengeOptions,
+    skipFingerprints: Set<string> | undefined,
+  ): Promise<GeneratedQuestion | undefined> {
     for (const category of categoryOrder) {
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
       // ChallengeCategory's values are a subset of ScoreCategory's (everything but "retention").
@@ -44,6 +76,11 @@ export class QuestionEngine {
 
       for (const type of types) {
         for (const candidate of candidates) {
+          if (skipFingerprints) {
+            const fingerprint = questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name);
+            if (skipFingerprints.has(fingerprint)) continue;
+          }
+
           const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
 
           if (options.aiProvider) {
@@ -71,26 +108,12 @@ export class QuestionEngine {
         }
       }
     }
-
-    getLogger().info('No template produced a confident question — skipping challenge');
     return undefined;
   }
 
-  private async buildCandidateFiles(root: string): Promise<
-    Array<{
-      file: FileContext;
-      fn?: import('../context/CodeContextExtractor').FunctionInfo;
-      testFile?: FileContext;
-      commitMessage: string | null;
-    }>
-  > {
+  private async buildCandidateFiles(root: string): Promise<CandidateFile[]> {
     const git = await analyzeGit(root);
-    const results: Array<{
-      file: FileContext;
-      fn?: import('../context/CodeContextExtractor').FunctionInfo;
-      testFile?: FileContext;
-      commitMessage: string | null;
-    }> = [];
+    const results: CandidateFile[] = [];
 
     if (git.available && git.changedFiles.length > 0) {
       const changedLines = parseChangedLines(git.diff);

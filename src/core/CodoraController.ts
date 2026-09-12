@@ -5,6 +5,7 @@ import { StorageManager } from './storage/StorageManager';
 import { extractFunctions } from './context/CodeContextExtractor';
 import { SessionManager } from './session/SessionManager';
 import { QuestionEngine } from './questions/QuestionEngine';
+import { questionFingerprint } from './questions/questionFingerprint';
 import { DeterministicEvaluator, isShallowFreeTextAnswer, type Evaluator } from './scoring/Evaluator';
 import { HybridEvaluator } from './scoring/HybridEvaluator';
 import { updateRollingScore, computeAura } from './scoring/ScoreEngine';
@@ -19,6 +20,8 @@ import { getLogger } from '../utils/logger';
 
 const STALE_SUBJECT_DAYS = 3;
 const STALE_SUBJECT_MS = STALE_SUBJECT_DAYS * 24 * 60 * 60 * 1000;
+/** How many of the most recent challenges to avoid exactly repeating. */
+const RECENT_FINGERPRINT_WINDOW = 10;
 
 export interface SubmitAnswerResult {
   evaluation: import('./scoring/ScoreTypes').EvaluationResult;
@@ -102,6 +105,7 @@ export class CodoraController implements vscode.Disposable {
     const project = this.storage.getProjectData();
     const enabledCategories = global.settings.categories as ChallengeCategory[];
     const staleSubjectFiles = this.computeStaleSubjectFiles(project.challenges);
+    const recentFingerprints = this.computeRecentFingerprints(project.challenges);
 
     // Resolved once per challenge (may prompt the user to configure an AI
     // provider) and reused for this same challenge's evaluation — this is
@@ -113,6 +117,7 @@ export class CodoraController implements vscode.Disposable {
       enabledCategories,
       categoryScores: global.categoryScores,
       staleSubjectFiles,
+      recentFingerprints,
       aiProvider: this.activeAIProvider,
     });
 
@@ -234,6 +239,15 @@ export class CodoraController implements vscode.Disposable {
       if (now - ts >= STALE_SUBJECT_MS) stale.add(file);
     }
     return stale;
+  }
+
+  private computeRecentFingerprints(challenges: ChallengeRecord[]): Set<string> {
+    const recent = challenges.slice(-RECENT_FINGERPRINT_WINDOW);
+    return new Set(
+      recent.map((c) =>
+        questionFingerprint(c.question.type, c.question.provenance.sourceFiles[0] ?? '', c.question.provenance.subjectFunction),
+      ),
+    );
   }
 
   private emitChange(): void {
