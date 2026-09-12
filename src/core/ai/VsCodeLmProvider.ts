@@ -29,17 +29,20 @@ const REQUEST_TIMEOUT_MS = 20_000;
 export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'vscode-lm' as const;
   readonly label: string;
+  /** False for a generic/router match (e.g. Copilot's "Auto") — see AIProviderResolver, which tries a manually configured key first in that case. */
+  readonly isKnownAgent: boolean;
 
-  constructor(private readonly model: vscode.LanguageModelChat) {
+  constructor(private readonly model: vscode.LanguageModelChat, isKnownAgent: boolean) {
     super();
+    this.isKnownAgent = isKnownAgent;
     this.label = `VS Code Language Model (${model.name})`;
   }
 
   static async resolve(): Promise<VsCodeLmProvider | undefined> {
     try {
       const models = await vscode.lm.selectChatModels();
-      const preferred = pickPreferredModel(models);
-      return preferred ? new VsCodeLmProvider(preferred) : undefined;
+      const picked = pickPreferredModel(models);
+      return picked ? new VsCodeLmProvider(picked.model, picked.isKnownAgent) : undefined;
     } catch (err) {
       getLogger().debug('vscode.lm.selectChatModels failed', { error: String(err) });
       return undefined;

@@ -14,10 +14,9 @@ const SECRET_KEY_GEMINI = 'codora.geminiApiKey';
 export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'gemini' | 'none-configured' | 'disabled';
 
 /**
- * Resolves which AI backend(s) Codora should try, preferring whatever the
- * developer is already using in VS Code over a manually configured key,
- * and prompting to configure one only when nothing is available and the
- * user hasn't already said "not now" (spec: AI is an optional enhancement,
+ * Resolves which AI backend(s) Codora should try, and in what order, and
+ * prompts to configure one only when nothing is available and the user
+ * hasn't already said "not now" (spec: AI is an optional enhancement,
  * never a requirement — see DeterministicEvaluator and the template-based
  * QuestionEngine, which work with no AI at all).
  *
@@ -25,9 +24,11 @@ export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'gemini' | 'none-c
  * resolve successfully (a model handle exists) while still failing to
  * produce usable output for reasons that have nothing to do with
  * availability (content filtering, a model that won't follow the
- * JSON-only instruction, etc.). If a manually configured key exists too,
- * it should still get a real chance rather than sitting unused because
- * something merely "available" was tried first and quietly kept failing.
+ * JSON-only instruction, etc.). Priority is: a specifically-identified
+ * coding agent (Claude/Codex) first, then any manually configured key,
+ * then a generic/router vscode.lm match (e.g. Copilot's "Auto") last —
+ * see resolveCandidates for why that generic case is untrusted enough to
+ * go behind a manual key rather than in front of it.
  */
 export class AIProviderResolver {
   constructor(
@@ -40,11 +41,19 @@ export class AIProviderResolver {
     const settings = this.storage.getGlobalProfile().settings;
     if (!settings.ai.enabled) return [];
 
-    const candidates: AIProvider[] = [];
     const lm = await VsCodeLmProvider.resolve();
-    if (lm) candidates.push(lm);
-    candidates.push(...(await this.getConfiguredManualProviders(settings.ai)));
-    return candidates;
+    const manual = await this.getConfiguredManualProviders(settings.ai);
+
+    // A specifically-identified coding agent (Claude, Codex) is trustworthy
+    // and preferred outright. A generic/router match — in practice,
+    // Copilot's "Auto" model — goes *after* any manually configured key: a
+    // direct API key reliably follows a structured-JSON-only instruction,
+    // whereas a vendor chat router has been observed silently returning
+    // empty or unparseable output for this kind of non-chat, structured
+    // task. Without this, a manually configured key could sit completely
+    // unused behind a generic match that never actually works.
+    if (lm?.isKnownAgent) return [lm, ...manual];
+    return [...manual, ...(lm ? [lm] : [])];
   }
 
   /**

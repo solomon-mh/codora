@@ -17,8 +17,14 @@ import { questionFingerprint } from './questionFingerprint';
 const MAX_FILE_READ_BYTES = 200_000;
 /** Real AI calls attempted per provider, per challenge, before moving to the next provider (or, if none are left, to deterministic templates) — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
 const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
-/** Shown once per session so a misconfigured provider doesn't nag on every single challenge — full detail always goes to the Codora output channel regardless. */
-let hasWarnedAboutAIFailure = false;
+/**
+ * Shown once per *provider* per session — keyed by provider id, not a
+ * single global flag — so switching from a failing provider to a newly
+ * configured one always surfaces fresh diagnostic info instead of going
+ * silent because something else already tripped the warning. Full detail
+ * always goes to the Codora output channel regardless of this cap.
+ */
+const warnedAIFailureProviders = new Set<string>();
 
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
@@ -104,7 +110,7 @@ export class QuestionEngine {
             continue;
           }
           if (attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) {
-            this.reportAIFailure(provider.label, lastFailureReason);
+            this.reportAIFailure(provider, lastFailureReason);
             return undefined;
           }
           attempts++;
@@ -125,27 +131,29 @@ export class QuestionEngine {
         }
       }
     }
-    if (attempts > 0) this.reportAIFailure(provider.label, lastFailureReason);
+    if (attempts > 0) this.reportAIFailure(provider, lastFailureReason);
     return undefined;
   }
 
   /**
    * Surfaces an actual AI failure reason to the user instead of letting it
-   * disappear into "why is this always a local template" confusion — shown
-   * once per session (full detail always goes to the Codora output
-   * channel via the warn-level logs in each provider's caller) so a
-   * misconfigured key doesn't produce a popup on every single challenge.
+   * disappear into "why is this always a local template" confusion —
+   * shown once per *provider id* per session (full detail always goes to
+   * the Codora output channel via the warn-level logs in each provider's
+   * caller) so a misconfigured key doesn't nag on every single challenge,
+   * while a newly tried provider still always gets its own fresh warning.
    */
-  private reportAIFailure(providerLabel: string, reason: string | undefined): void {
-    getLogger().warn('AI did not produce a usable question after several attempts — falling back to local templates', {
+  private reportAIFailure(provider: AIProvider, reason: string | undefined): void {
+    const providerLabel = provider.label;
+    getLogger().warn('AI did not produce a usable question after several attempts — trying next provider or falling back to local templates', {
       provider: providerLabel,
       reason,
     });
-    if (hasWarnedAboutAIFailure) return;
-    hasWarnedAboutAIFailure = true;
+    if (warnedAIFailureProviders.has(provider.id)) return;
+    warnedAIFailureProviders.add(provider.id);
     const detail = reason ? ` (${reason})` : '';
     void vscode.window.showWarningMessage(
-      `Codora: AI question generation failed via ${providerLabel}${detail} — using local templates instead. See the "Codora" output channel for details.`,
+      `Codora: AI question generation failed via ${providerLabel}${detail} — trying the next configured option. See the "Codora" output channel for details.`,
     );
   }
 
