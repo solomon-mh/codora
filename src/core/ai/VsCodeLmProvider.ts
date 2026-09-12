@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
 import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
+import { pickPreferredModel } from './pickPreferredModel';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
@@ -14,12 +15,15 @@ const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * Uses whatever chat model the developer already has available in VS Code
- * (e.g. GitHub Copilot Chat) via the built-in Language Model API — no
- * separate API key, no extra account. `selectChatModels`/`sendRequest`
- * trigger VS Code's own consent UI the first time; per the API's own
- * contract, this must only be reached in response to a user action, which
- * holds here since generateChallenge() is only ever invoked from a command
- * or a user clicking "Take Challenge" on a notification.
+ * via the built-in Language Model API — no separate API key, no extra
+ * account. When multiple models are registered, pickPreferredModel()
+ * prefers a dedicated coding agent (Claude, Codex, etc.) over GitHub
+ * Copilot over anything else, so this picks the AI the developer is
+ * actually working with. `selectChatModels`/`sendRequest` trigger VS
+ * Code's own consent UI the first time; per the API's own contract, this
+ * must only be reached in response to a user action, which holds here
+ * since generateChallenge() is only ever invoked from a command or a user
+ * clicking "Take Challenge" on a notification.
  */
 export class VsCodeLmProvider implements AIProvider {
   readonly id = 'vscode-lm' as const;
@@ -32,7 +36,8 @@ export class VsCodeLmProvider implements AIProvider {
   static async resolve(): Promise<VsCodeLmProvider | undefined> {
     try {
       const models = await vscode.lm.selectChatModels();
-      return models.length > 0 ? new VsCodeLmProvider(models[0]) : undefined;
+      const preferred = pickPreferredModel(models);
+      return preferred ? new VsCodeLmProvider(preferred) : undefined;
     } catch (err) {
       getLogger().debug('vscode.lm.selectChatModels failed', { error: String(err) });
       return undefined;
