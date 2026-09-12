@@ -99,6 +99,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage('Codora project data reset.');
       }
     }),
+    vscode.commands.registerCommand('codora.configureAI', () => void controller.configureAI()),
   );
 
   context.subscriptions.push(controller);

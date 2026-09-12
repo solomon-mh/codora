@@ -6,12 +6,15 @@ import { extractFunctions } from './context/CodeContextExtractor';
 import { SessionManager } from './session/SessionManager';
 import { QuestionEngine } from './questions/QuestionEngine';
 import { DeterministicEvaluator, isShallowFreeTextAnswer, type Evaluator } from './scoring/Evaluator';
+import { HybridEvaluator } from './scoring/HybridEvaluator';
 import { updateRollingScore, computeAura } from './scoring/ScoreEngine';
 import { recordChallengeCompletion, applyStreakDecay } from './scoring/StreakEngine';
 import { evaluateBadges } from './badges/BadgeEngine';
 import { generateQuestion } from './questions/QuestionGenerator';
 import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeCategory, type ChallengeAnswer, type ChallengeRecord, type GeneratedQuestion } from './questions/QuestionTypes';
 import type { CodoraSettings } from './storage/StorageSchema';
+import { AIProviderResolver, type AIStatus } from './ai/AIProviderResolver';
+import type { AIProvider } from './ai/AITypes';
 import { getLogger } from '../utils/logger';
 
 const STALE_SUBJECT_DAYS = 3;
@@ -31,13 +34,17 @@ export interface SubmitAnswerResult {
  */
 export class CodoraController implements vscode.Disposable {
   readonly storage: StorageManager;
+  readonly aiResolver: AIProviderResolver;
   private readonly sessionManager: SessionManager;
   private readonly questionEngine: QuestionEngine;
-  private readonly evaluator: Evaluator = new DeterministicEvaluator();
+  private readonly deterministicEvaluator = new DeterministicEvaluator();
+  private readonly evaluator: Evaluator;
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeState = this.changeEmitter.event;
 
   private pendingQuestion: GeneratedQuestion | null = null;
+  /** The AI provider (if any) resolved for the in-flight challenge, reused for its evaluation. */
+  private activeAIProvider: AIProvider | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -46,7 +53,9 @@ export class CodoraController implements vscode.Disposable {
   ) {
     const projectId = sanitizeId(workspaceFolder.uri.fsPath);
     this.storage = new StorageManager(context, projectId, workspaceFolder.name);
+    this.aiResolver = new AIProviderResolver(context.secrets, this.storage);
     this.questionEngine = new QuestionEngine(workspaceFolder);
+    this.evaluator = new HybridEvaluator(this.deterministicEvaluator, () => this.activeAIProvider);
     this.sessionManager = new SessionManager(workspaceFolder, {
       onChallengeReady,
       getChallengeInterval: () => this.storage.getGlobalProfile().settings.challengeInterval,
@@ -94,10 +103,17 @@ export class CodoraController implements vscode.Disposable {
     const enabledCategories = global.settings.categories as ChallengeCategory[];
     const staleSubjectFiles = this.computeStaleSubjectFiles(project.challenges);
 
+    // Resolved once per challenge (may prompt the user to configure an AI
+    // provider) and reused for this same challenge's evaluation — this is
+    // always reached via a command or a "Take Challenge" click, so it's a
+    // valid place for the Language Model API's own consent flow to fire.
+    this.activeAIProvider = await this.aiResolver.resolveOrPrompt();
+
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
       categoryScores: global.categoryScores,
       staleSubjectFiles,
+      aiProvider: this.activeAIProvider,
     });
 
     this.pendingQuestion = question ?? null;
@@ -111,13 +127,26 @@ export class CodoraController implements vscode.Disposable {
     return this.pendingQuestion;
   }
 
+  async getAIStatus(): Promise<AIStatus> {
+    return this.aiResolver.getStatus();
+  }
+
+  async configureAI(): Promise<void> {
+    await this.aiResolver.configureInteractively();
+    this.emitChange();
+  }
+
+  async disableAI(): Promise<void> {
+    await this.updateSettings({ ai: { ...this.storage.getGlobalProfile().settings.ai, enabled: false } });
+  }
+
   async submitAnswer(answer: ChallengeAnswer): Promise<SubmitAnswerResult> {
     const question = this.pendingQuestion;
     if (!question || question.id !== answer.questionId) {
       throw new Error('No matching pending question for this answer');
     }
 
-    const evaluation = this.evaluator.evaluate(question, answer);
+    const evaluation = await this.evaluator.evaluate(question, answer);
     const now = Date.now();
     const scoreCategory = QUESTION_TYPE_TO_SCORE_CATEGORY[question.type];
 
