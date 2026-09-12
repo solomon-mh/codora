@@ -49,6 +49,8 @@ export class CodoraController implements vscode.Disposable {
   private pendingQuestion: GeneratedQuestion | null = null;
   /** AI providers (if any) resolved for the in-flight challenge, in priority order, reused for its evaluation. */
   private activeAIProviders: AIProvider[] = [];
+  /** Shown once per session: "no AI provider was even tried, and here's why" — the silent version of this was impossible to distinguish from "AI tried and failed". */
+  private hasWarnedNoProviders = false;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -115,6 +117,29 @@ export class CodoraController implements vscode.Disposable {
     // Every configured provider is tried in priority order, not just the
     // first one that's merely *available* — see AIProviderResolver.
     this.activeAIProviders = await this.aiResolver.resolveCandidatesOrPrompt();
+    getLogger().info('AI providers resolved for this challenge', {
+      count: this.activeAIProviders.length,
+      providers: this.activeAIProviders.map((p) => p.id),
+      aiEnabledSetting: global.settings.ai.enabled,
+      aiPromptDismissed: global.aiPromptDismissed,
+    });
+    if (this.activeAIProviders.length === 0) {
+      let reason: string;
+      if (!global.settings.ai.enabled) {
+        reason = 'AI is turned off (Dashboard → Settings → "Allow Codora to use an AI model" is unchecked)';
+      } else if (global.aiPromptDismissed) {
+        reason = 'nothing is configured, and the one-time setup prompt was previously dismissed';
+      } else {
+        reason = 'nothing is configured and nothing is available via VS Code';
+      }
+      getLogger().warn(`No AI provider will be tried this challenge: ${reason}`);
+      if (!this.hasWarnedNoProviders) {
+        this.hasWarnedNoProviders = true;
+        void vscode.window.showWarningMessage(
+          `Codora: every challenge is using local templates because ${reason}. Run "Codora: Configure AI Provider" to fix this.`,
+        );
+      }
+    }
 
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
