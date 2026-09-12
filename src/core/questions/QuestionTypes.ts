@@ -89,6 +89,14 @@ export interface GeneratedQuestion {
   createdAt: number;
   /** Set when this question is a follow-up to a shallow prior answer. */
   followUpToChallengeId?: string;
+  /**
+   * Whether an AI provider wrote this question, or a local deterministic
+   * template did — shown in the UI so it's never ambiguous. Optional here
+   * only so individual templates don't each have to set it; QuestionGenerator
+   * fills in 'deterministic' by default, and AIQuestionGenerator sets 'ai'
+   * explicitly, so every question that actually reaches a caller has it.
+   */
+  generatedBy?: 'ai' | 'deterministic';
 }
 
 export interface ChallengeAnswer {

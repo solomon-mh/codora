@@ -73,8 +73,30 @@ export function App(): JSX.Element {
 
   return (
     <div style={{ padding: 24, maxWidth: 560, margin: '0 auto' }}>
-      <div className="codora-muted" style={{ fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        🧠 Codora Challenge · {question.provenance.reason}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span
+          className="codora-muted"
+          style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}
+        >
+          🧠 Codora Challenge · {question.provenance.reason}
+        </span>
+        <span
+          title={
+            question.generatedBy === 'ai'
+              ? 'Written by an AI model from your code'
+              : 'Written by a local deterministic template — no AI involved'
+          }
+          style={{
+            fontSize: 10,
+            padding: '2px 6px',
+            borderRadius: 4,
+            border: '1px solid var(--codora-border)',
+            color: question.generatedBy === 'ai' ? 'var(--codora-accent)' : 'var(--codora-muted)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {question.generatedBy === 'ai' ? '✨ AI-generated' : '📋 Local template'}
+        </span>
       </div>
 
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 20 }}>{question.prompt}</div>

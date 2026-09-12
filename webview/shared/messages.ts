@@ -23,6 +23,7 @@ export interface HistoryItem {
   feedback: string;
   strengths: string[];
   gaps: string[];
+  generatedBy: 'ai' | 'deterministic';
 }
 
 export interface BadgeItem {

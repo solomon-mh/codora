@@ -43,7 +43,8 @@ const TEMPLATES: Record<QuestionType, TemplateFn> = {
  * that as "try a different type/context", never fall back to a guess.
  */
 export function generateQuestion(type: QuestionType, ctx: TemplateContext): GeneratedQuestion | undefined {
-  return TEMPLATES[type](ctx);
+  const question = TEMPLATES[type](ctx);
+  return question ? { ...question, generatedBy: 'deterministic' } : undefined;
 }
 
 export const ALL_QUESTION_TYPES: QuestionType[] = [

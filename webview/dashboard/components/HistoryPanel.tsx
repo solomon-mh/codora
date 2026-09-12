@@ -27,7 +27,7 @@ export function HistoryPanel({ history }: { history: HistoryItem[] }): JSX.Eleme
             <span className="codora-muted">{item.timestampLabel}</span>
           </div>
           <div style={{ fontSize: 12, textTransform: 'capitalize' }} className="codora-muted">
-            {item.category}
+            {item.category} · {item.generatedBy === 'ai' ? '✨ AI-generated' : '📋 Local template'}
           </div>
           <div style={{ fontSize: 13, marginTop: 4 }}>{item.prompt}</div>
           <div className="codora-muted" style={{ fontSize: 11, marginTop: 2 }}>Score: {Math.round(item.scorePct)}%</div>

@@ -59,6 +59,7 @@ export async function tryGenerateAIQuestion(
     difficulty,
     prompt: payload.prompt,
     body,
+    generatedBy: 'ai',
     provenance: {
       sourceFiles: [candidate.file.relativePath],
       sourceType: 'git-diff',
