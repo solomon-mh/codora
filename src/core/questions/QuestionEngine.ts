@@ -9,6 +9,9 @@ import type { ChallengeCategory, GeneratedQuestion } from './QuestionTypes';
 import { QUESTION_TYPE_TO_CATEGORY } from './QuestionTypes';
 import type { RollingScoreMap, ScoreCategory } from '../scoring/ScoreTypes';
 import { getLogger } from '../../utils/logger';
+import { tryGenerateAIQuestion } from './AIQuestionGenerator';
+import type { AIProvider } from '../ai/AITypes';
+import { pickDifficulty } from './QuestionDifficulty';
 
 const MAX_FILE_READ_BYTES = 200_000;
 
@@ -17,6 +20,8 @@ export interface GenerateChallengeOptions {
   categoryScores: RollingScoreMap;
   /** Files asked about more than N days ago — eligible for a retention check. */
   staleSubjectFiles: Set<string>;
+  /** When set, each (type, candidate) pair is tried via AI first, falling back to the deterministic template on any failure. */
+  aiProvider?: AIProvider;
 }
 
 export class QuestionEngine {
@@ -34,15 +39,32 @@ export class QuestionEngine {
 
     for (const category of categoryOrder) {
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
+      // ChallengeCategory's values are a subset of ScoreCategory's (everything but "retention").
+      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+
       for (const type of types) {
         for (const candidate of candidates) {
+          const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
+
+          if (options.aiProvider) {
+            const aiQuestion = await tryGenerateAIQuestion(
+              options.aiProvider,
+              category,
+              type,
+              difficulty,
+              candidate,
+              isRetentionCheck,
+            );
+            if (aiQuestion) return aiQuestion;
+          }
+
           const ctx: TemplateContext = {
             file: candidate.file,
             fn: candidate.fn,
             testFile: candidate.testFile,
             commitMessage: candidate.commitMessage,
             now: Date.now(),
-            isRetentionCheck: options.staleSubjectFiles.has(candidate.file.relativePath),
+            isRetentionCheck,
           };
           const question = generateQuestion(type, ctx);
           if (question) return question;

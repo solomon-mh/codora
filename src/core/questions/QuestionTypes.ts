@@ -72,6 +72,8 @@ export interface QuestionProvenance {
   reason: string;
   /** The function/class this question is about, when applicable — lets a follow-up re-target the same subject. */
   subjectFunction?: string;
+  /** The exact code snippet shown to an AI provider when generating this question, reused for evaluation. */
+  codeSnippet?: string;
 }
 
 export interface GeneratedQuestion {
