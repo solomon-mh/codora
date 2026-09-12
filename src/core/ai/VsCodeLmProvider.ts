@@ -41,10 +41,33 @@ export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
   static async resolve(): Promise<VsCodeLmProvider | undefined> {
     try {
       const models = await vscode.lm.selectChatModels();
+      // Logged in full because "which models does this editor actually
+      // expose?" is not answerable any other way, and it's the only way to
+      // tell "my AI extension isn't registered with vscode.lm" apart from
+      // "Codora picked the wrong one".
+      getLogger().info('vscode.lm chat models available', {
+        count: models.length,
+        models: models.map((m) => ({
+          vendor: m.vendor,
+          family: m.family,
+          name: m.name,
+          id: m.id,
+          maxInputTokens: m.maxInputTokens,
+        })),
+      });
+
       const picked = pickPreferredModel(models);
+      if (picked) {
+        getLogger().info('vscode.lm model selected', {
+          name: picked.model.name,
+          vendor: picked.model.vendor,
+          family: picked.model.family,
+          isKnownAgent: picked.isKnownAgent,
+        });
+      }
       return picked ? new VsCodeLmProvider(picked.model, picked.isKnownAgent) : undefined;
     } catch (err) {
-      getLogger().debug('vscode.lm.selectChatModels failed', { error: String(err) });
+      getLogger().warn('vscode.lm.selectChatModels failed', { error: String(err) });
       return undefined;
     }
   }
@@ -78,8 +101,31 @@ export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
     const timer = setTimeout(() => cts.cancel(), REQUEST_TIMEOUT_MS);
     try {
       const response = await this.model.sendRequest(messages, {}, cts.token);
+
+      // Iterating `stream` rather than `text` on purpose: `text` silently
+      // drops every non-text part, so a model that answers with only
+      // tool-call/other parts is indistinguishable from one that answered
+      // nothing at all. Collecting the part types lets an empty result say
+      // *which* of those happened.
       let out = '';
-      for await (const fragment of response.text) out += fragment;
+      const partTypes = new Set<string>();
+      for await (const part of response.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          partTypes.add('text');
+          out += part.value;
+        } else {
+          partTypes.add((part as object)?.constructor?.name ?? typeof part);
+        }
+      }
+
+      if (!out) {
+        getLogger().warn('vscode.lm returned no text', {
+          model: this.model.name,
+          vendor: this.model.vendor,
+          partTypesSeen: [...partTypes],
+          promptChars: system.length + user.length,
+        });
+      }
       return out;
     } finally {
       clearTimeout(timer);

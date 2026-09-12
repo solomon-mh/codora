@@ -89,7 +89,7 @@ export function App(): JSX.Element {
           className="codora-muted"
           style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}
         >
-          🧠 Codora Challenge · {question.provenance.reason}
+          🧠 Codora Challenge
         </span>
         <span
           title={
@@ -110,7 +110,12 @@ export function App(): JSX.Element {
         </span>
       </div>
 
-      <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 20 }}>{question.prompt}</div>
+      <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 6 }}>{question.prompt}</div>
+
+      {/* Why this question exists — supporting info, so it stays small and quiet. */}
+      <div className="codora-muted" style={{ fontSize: 11, lineHeight: 1.4, marginBottom: 20 }}>
+        {question.provenance.reason}
+      </div>
 
       {!result && question.body.kind === 'multiple-choice' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>

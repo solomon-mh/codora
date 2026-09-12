@@ -12,10 +12,12 @@ import { tryGenerateAIQuestion } from './AIQuestionGenerator';
 import type { AIProvider } from '../ai/AITypes';
 import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
+import { summarizeProviderError } from '../ai/summarizeProviderError';
 
 const MAX_FILE_READ_BYTES = 200_000;
 /** Real AI calls attempted per provider, per challenge, before moving to the next provider — bounded so a failing provider doesn't turn every challenge into dozens of sequential requests. A non-retryable error (bad key, exhausted quota, retired model) stops that provider immediately, well before this cap. */
 const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
+
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
   categoryScores: RollingScoreMap;
@@ -147,9 +149,11 @@ export class QuestionEngine {
     reason: string | undefined,
     options: GenerateChallengeOptions,
   ): void {
+    // Summarized here too: the per-attempt log above already recorded this,
+    // and repeating a 1.5KB JSON error verbatim made the channel unreadable.
     getLogger().warn('AI provider could not produce a usable question', {
       provider: provider.label,
-      reason,
+      reason: summarizeProviderError(reason),
     });
     options.onProviderFailure?.(provider.label, reason);
   }

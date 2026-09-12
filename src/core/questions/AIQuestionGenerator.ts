@@ -1,6 +1,7 @@
 import { newId } from '../../utils/id';
 import { getLogger } from '../../utils/logger';
 import { isRetryableProviderError } from '../ai/classifyProviderError';
+import { summarizeProviderError } from '../ai/summarizeProviderError';
 import type { AIProvider } from '../ai/AITypes';
 import type { FunctionInfo } from '../context/CodeContextExtractor';
 import type {
@@ -58,7 +59,14 @@ export async function tryGenerateAIQuestion(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     const retryable = isRetryableProviderError(err);
-    getLogger().warn('AI question generation failed', { provider: provider.id, error: reason, retryable });
+    // Summarized, not verbatim: the untruncated error (a Gemini quota error
+    // is ~1.5KB of nested JSON) gets logged once per attempt per provider
+    // and drowns out everything else in the channel.
+    getLogger().warn('AI question generation failed', {
+      provider: provider.id,
+      error: summarizeProviderError(reason),
+      retryable,
+    });
     onFailure?.(reason, retryable);
     return undefined;
   }

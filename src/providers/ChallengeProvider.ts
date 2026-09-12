@@ -9,6 +9,7 @@ import type {
   ExtensionToChallengeMessage,
 } from '../../webview/shared/messages';
 import type { ManualProviderId } from '../core/ai/AIProviderResolver';
+import { summarizeProviderError } from '../core/ai/summarizeProviderError';
 import type { GeneratedQuestion } from '../core/questions/QuestionTypes';
 import { getLogger } from '../utils/logger';
 
@@ -17,8 +18,6 @@ type PendingView =
   | { kind: 'question'; question: GeneratedQuestion }
   | { kind: 'unavailable'; payload: ChallengeUnavailable };
 
-const MAX_REASON_CHARS = 220;
-
 /** Maps a panel setup button to the provider AIProviderResolver should configure. */
 const SETUP_TARGETS = {
   'setup-vscode-lm': 'vscode-lm',
@@ -26,34 +25,6 @@ const SETUP_TARGETS = {
   'setup-openai': 'openai',
   'setup-gemini': 'gemini',
 } as const satisfies Record<string, ManualProviderId | 'vscode-lm'>;
-
-/**
- * Provider errors are frequently a wall of JSON (a Gemini quota error is
- * ~1.5KB of nested detail). Pull out the human-readable `message` when the
- * error is JSON, and cap the length either way — the full text is always in
- * the output channel, which the panel links to.
- */
-function summarizeReason(reason: string | undefined): string {
-  if (!reason) return 'no usable question returned';
-
-  let text = reason;
-  const jsonStart = reason.indexOf('{');
-  if (jsonStart !== -1) {
-    try {
-      const parsed = JSON.parse(reason.slice(jsonStart)) as { error?: { message?: string; status?: string } };
-      const message = parsed.error?.message;
-      if (message) {
-        const prefix = reason.slice(0, jsonStart).trim();
-        text = prefix ? `${prefix} ${message}` : message;
-      }
-    } catch {
-      // Not JSON after all — fall through and just truncate the raw text.
-    }
-  }
-
-  text = text.replace(/\s+/g, ' ').trim();
-  return text.length > MAX_REASON_CHARS ? `${text.slice(0, MAX_REASON_CHARS)}…` : text;
-}
 
 export class ChallengeProvider {
   private panel: vscode.WebviewPanel | undefined;
@@ -143,7 +114,7 @@ export class ChallengeProvider {
     // very different responses from the user.
     const failures = this.controller.getLastAIFailures();
     const reported = failures
-      .map((f) => `• ${f.provider}: ${summarizeReason(f.reason)}`)
+      .map((f) => `• ${f.provider}: ${summarizeProviderError(f.reason)}`)
       .join('\n');
 
     return {
