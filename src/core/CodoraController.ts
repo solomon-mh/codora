@@ -47,8 +47,8 @@ export class CodoraController implements vscode.Disposable {
   readonly onDidChangeState = this.changeEmitter.event;
 
   private pendingQuestion: GeneratedQuestion | null = null;
-  /** The AI provider (if any) resolved for the in-flight challenge, reused for its evaluation. */
-  private activeAIProvider: AIProvider | undefined;
+  /** AI providers (if any) resolved for the in-flight challenge, in priority order, reused for its evaluation. */
+  private activeAIProviders: AIProvider[] = [];
 
   constructor(
     context: vscode.ExtensionContext,
@@ -59,7 +59,7 @@ export class CodoraController implements vscode.Disposable {
     this.storage = new StorageManager(context, projectId, workspaceFolder.name);
     this.aiResolver = new AIProviderResolver(context.secrets, this.storage);
     this.questionEngine = new QuestionEngine(workspaceFolder);
-    this.evaluator = new HybridEvaluator(this.deterministicEvaluator, () => this.activeAIProvider);
+    this.evaluator = new HybridEvaluator(this.deterministicEvaluator, () => this.activeAIProviders);
     this.sessionManager = new SessionManager(workspaceFolder, {
       onChallengeReady,
       getChallengeIntervalMs: () => resolveIntervalMs(this.storage.getGlobalProfile().settings),
@@ -112,14 +112,16 @@ export class CodoraController implements vscode.Disposable {
     // provider) and reused for this same challenge's evaluation — this is
     // always reached via a command or a "Take Challenge" click, so it's a
     // valid place for the Language Model API's own consent flow to fire.
-    this.activeAIProvider = await this.aiResolver.resolveOrPrompt();
+    // Every configured provider is tried in priority order, not just the
+    // first one that's merely *available* — see AIProviderResolver.
+    this.activeAIProviders = await this.aiResolver.resolveCandidatesOrPrompt();
 
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
       categoryScores: global.categoryScores,
       staleSubjectFiles,
       recentFingerprints,
-      aiProvider: this.activeAIProvider,
+      aiProviders: this.activeAIProviders,
     });
 
     this.pendingQuestion = question ?? null;

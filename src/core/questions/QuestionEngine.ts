@@ -15,8 +15,8 @@ import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
 
 const MAX_FILE_READ_BYTES = 200_000;
-/** Real AI calls attempted per challenge before giving up and falling to deterministic templates — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
-const MAX_AI_ATTEMPTS = 4;
+/** Real AI calls attempted per provider, per challenge, before moving to the next provider (or, if none are left, to deterministic templates) — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
+const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
 /** Shown once per session so a misconfigured provider doesn't nag on every single challenge — full detail always goes to the Codora output channel regardless. */
 let hasWarnedAboutAIFailure = false;
 
@@ -25,8 +25,13 @@ export interface GenerateChallengeOptions {
   categoryScores: RollingScoreMap;
   /** Files asked about more than N days ago — eligible for a retention check. */
   staleSubjectFiles: Set<string>;
-  /** When set, AI is tried across several categories/files before deterministic templates are touched at all — see MAX_AI_ATTEMPTS. */
-  aiProvider?: AIProvider;
+  /**
+   * Tried in order — each gets its own bounded attempt budget
+   * (MAX_AI_ATTEMPTS_PER_PROVIDER) across different categories/files before
+   * moving to the next candidate. Deterministic templates only run once
+   * every candidate here has been exhausted.
+   */
+  aiProviders?: AIProvider[];
   /** Fingerprints of recently-asked (type, file, function) combos — avoided on a first pass so the same question doesn't repeat while other candidates exist. */
   recentFingerprints?: Set<string>;
 }
@@ -51,12 +56,15 @@ export class QuestionEngine {
 
     const categoryOrder = weightedCategoryOrder(options.enabledCategories, options.categoryScores);
 
-    // AI gets a real, multi-attempt chance across different
-    // categories/files before deterministic templates are touched at all
-    // — deterministic is the last resort, not a same-combo fallback for
-    // the first thing AI happened to fail on.
-    if (options.aiProvider) {
-      const aiQuestion = await this.tryAI(candidates, categoryOrder, options, options.recentFingerprints);
+    // Every configured AI provider gets a real, multi-attempt chance
+    // across different categories/files before deterministic templates
+    // are touched at all — deterministic is the last resort, not a
+    // same-combo fallback for the first thing the first provider failed
+    // on. A VS Code Language Model can resolve successfully (a model
+    // handle exists) while still never producing usable output, so a
+    // manually configured key must still get its own real chance.
+    for (const provider of options.aiProviders ?? []) {
+      const aiQuestion = await this.tryAI(provider, candidates, categoryOrder, options, options.recentFingerprints);
       if (aiQuestion) return aiQuestion;
     }
 
@@ -77,13 +85,12 @@ export class QuestionEngine {
   }
 
   private async tryAI(
+    provider: AIProvider,
     candidates: CandidateFile[],
     categoryOrder: ChallengeCategory[],
     options: GenerateChallengeOptions,
     skipFingerprints: Set<string> | undefined,
   ): Promise<GeneratedQuestion | undefined> {
-    const provider = options.aiProvider;
-    if (!provider) return undefined;
     let attempts = 0;
     let lastFailureReason: string | undefined;
 
@@ -96,7 +103,7 @@ export class QuestionEngine {
           if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
             continue;
           }
-          if (attempts >= MAX_AI_ATTEMPTS) {
+          if (attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) {
             this.reportAIFailure(provider.label, lastFailureReason);
             return undefined;
           }

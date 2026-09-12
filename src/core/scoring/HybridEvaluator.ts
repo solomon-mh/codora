@@ -5,19 +5,21 @@ import type { AIProvider } from '../ai/AITypes';
 import { getLogger } from '../../utils/logger';
 
 /**
- * Composes the deterministic evaluator with an optional AI provider.
+ * Composes the deterministic evaluator with the resolved AI provider
+ * candidates, tried in priority order.
  *
  * Multiple-choice answers are always scored deterministically — exact
  * match is objectively correct, so there's no benefit (and real risk) in
  * asking a model to judge it. AI is used only where deterministic scoring
- * is genuinely weak: open-ended free-text answers. Any AI failure
- * (network error, timeout, invalid response) falls straight back to the
- * deterministic evaluator rather than surfacing an error to the user.
+ * is genuinely weak: open-ended free-text answers. Each candidate provider
+ * is tried in turn; any failure (network error, timeout, invalid response)
+ * moves on to the next candidate, and the deterministic evaluator is the
+ * final fallback rather than surfacing an error to the user.
  */
 export class HybridEvaluator implements Evaluator {
   constructor(
     private readonly deterministic: Evaluator,
-    private readonly getProvider: () => AIProvider | undefined,
+    private readonly getProviders: () => AIProvider[],
   ) {}
 
   async evaluate(question: GeneratedQuestion, answer: ChallengeAnswer): Promise<EvaluationResult> {
@@ -25,32 +27,30 @@ export class HybridEvaluator implements Evaluator {
       return this.deterministic.evaluate(question, answer);
     }
 
-    const provider = this.getProvider();
-    if (!provider) {
+    const codeSnippet = question.provenance.codeSnippet;
+    if (!codeSnippet) {
       return this.deterministic.evaluate(question, answer);
     }
 
-    try {
-      const codeSnippet = question.provenance.codeSnippet;
-      if (!codeSnippet) {
-        return this.deterministic.evaluate(question, answer);
+    for (const provider of this.getProviders()) {
+      try {
+        const payload = await provider.evaluateFreeText({
+          questionPrompt: question.prompt,
+          codeSnippet,
+          category: question.category,
+          developerAnswer: answer.text ?? '',
+        });
+        if (payload) return payload;
+        getLogger().warn('AI evaluation returned no usable payload, trying next provider or falling back', {
+          provider: provider.id,
+          preview: provider.getLastRawResponsePreview(),
+        });
+      } catch (err) {
+        getLogger().warn('AI evaluation failed, trying next provider or falling back', {
+          provider: provider.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-      const payload = await provider.evaluateFreeText({
-        questionPrompt: question.prompt,
-        codeSnippet,
-        category: question.category,
-        developerAnswer: answer.text ?? '',
-      });
-      if (payload) return payload;
-      getLogger().warn('AI evaluation returned no usable payload, falling back to deterministic', {
-        provider: provider.id,
-        preview: provider.getLastRawResponsePreview(),
-      });
-    } catch (err) {
-      getLogger().warn('AI evaluation failed, falling back to deterministic', {
-        provider: provider.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
 
     return this.deterministic.evaluate(question, answer);
