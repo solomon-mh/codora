@@ -17,6 +17,8 @@ import { questionFingerprint } from './questionFingerprint';
 const MAX_FILE_READ_BYTES = 200_000;
 /** Real AI calls attempted per challenge before giving up and falling to deterministic templates — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
 const MAX_AI_ATTEMPTS = 4;
+/** Shown once per session so a misconfigured provider doesn't nag on every single challenge — full detail always goes to the Codora output channel regardless. */
+let hasWarnedAboutAIFailure = false;
 
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
@@ -56,7 +58,6 @@ export class QuestionEngine {
     if (options.aiProvider) {
       const aiQuestion = await this.tryAI(candidates, categoryOrder, options, options.recentFingerprints);
       if (aiQuestion) return aiQuestion;
-      getLogger().info('AI did not produce a usable question after several attempts — falling back to local templates');
     }
 
     // Deterministic first pass avoids repeating anything asked recently, so
@@ -84,6 +85,7 @@ export class QuestionEngine {
     const provider = options.aiProvider;
     if (!provider) return undefined;
     let attempts = 0;
+    let lastFailureReason: string | undefined;
 
     for (const category of categoryOrder) {
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
@@ -94,16 +96,50 @@ export class QuestionEngine {
           if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
             continue;
           }
-          if (attempts >= MAX_AI_ATTEMPTS) return undefined;
+          if (attempts >= MAX_AI_ATTEMPTS) {
+            this.reportAIFailure(provider.label, lastFailureReason);
+            return undefined;
+          }
           attempts++;
 
           const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
-          const aiQuestion = await tryGenerateAIQuestion(provider, category, type, difficulty, candidate, isRetentionCheck);
+          const aiQuestion = await tryGenerateAIQuestion(
+            provider,
+            category,
+            type,
+            difficulty,
+            candidate,
+            isRetentionCheck,
+            (reason) => {
+              lastFailureReason = reason;
+            },
+          );
           if (aiQuestion) return aiQuestion;
         }
       }
     }
+    if (attempts > 0) this.reportAIFailure(provider.label, lastFailureReason);
     return undefined;
+  }
+
+  /**
+   * Surfaces an actual AI failure reason to the user instead of letting it
+   * disappear into "why is this always a local template" confusion — shown
+   * once per session (full detail always goes to the Codora output
+   * channel via the warn-level logs in each provider's caller) so a
+   * misconfigured key doesn't produce a popup on every single challenge.
+   */
+  private reportAIFailure(providerLabel: string, reason: string | undefined): void {
+    getLogger().warn('AI did not produce a usable question after several attempts — falling back to local templates', {
+      provider: providerLabel,
+      reason,
+    });
+    if (hasWarnedAboutAIFailure) return;
+    hasWarnedAboutAIFailure = true;
+    const detail = reason ? ` (${reason})` : '';
+    void vscode.window.showWarningMessage(
+      `Codora: AI question generation failed via ${providerLabel}${detail} — using local templates instead. See the "Codora" output channel for details.`,
+    );
   }
 
   private async tryDeterministic(

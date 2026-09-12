@@ -58,6 +58,10 @@ export class VsCodeLmProvider implements AIProvider {
     return validateEvaluationPayload(extractJsonObject(text));
   }
 
+  // Deliberately no catch-and-swallow around sendRequest here: callers
+  // (tryGenerateAIQuestion, HybridEvaluator) need the real error — e.g.
+  // LanguageModelError.NoPermissions vs a timeout are very different
+  // problems, and a generic "request failed" makes them indistinguishable.
   private async send(system: string, user: string): Promise<string | undefined> {
     // The Language Model API has no distinct system-role message, so the
     // instructions and the task are combined into one user message with
@@ -70,9 +74,6 @@ export class VsCodeLmProvider implements AIProvider {
       let out = '';
       for await (const fragment of response.text) out += fragment;
       return out;
-    } catch (err) {
-      getLogger().warn('VS Code Language Model request failed', { error: String(err) });
-      return undefined;
     } finally {
       clearTimeout(timer);
       cts.dispose();

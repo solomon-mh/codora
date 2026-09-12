@@ -19,6 +19,10 @@ export interface AICandidate {
  * timeout, unparseable/invalid response, or the model's own "skip") so the
  * caller falls straight through to the deterministic templates — the same
  * "skip rather than guess" contract every template already follows.
+ *
+ * `onFailure`, when given, receives a human-readable reason for the most
+ * recent failure — used to surface *why* AI generation didn't work instead
+ * of silently landing on a deterministic template with no explanation.
  */
 export async function tryGenerateAIQuestion(
   provider: AIProvider,
@@ -27,6 +31,7 @@ export async function tryGenerateAIQuestion(
   difficulty: Difficulty,
   candidate: AICandidate,
   isRetentionCheck: boolean,
+  onFailure?: (reason: string) => void,
 ): Promise<GeneratedQuestion | undefined> {
   const codeSnippet = (candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim();
   if (!codeSnippet) return undefined;
@@ -42,10 +47,16 @@ export async function tryGenerateAIQuestion(
       changeReason: candidate.commitMessage ?? undefined,
     });
   } catch (err) {
-    getLogger().warn('AI question generation threw', { provider: provider.id, error: String(err) });
+    const reason = err instanceof Error ? err.message : String(err);
+    getLogger().warn('AI question generation failed', { provider: provider.id, error: reason });
+    onFailure?.(reason);
     return undefined;
   }
-  if (!payload) return undefined;
+  if (!payload) {
+    getLogger().warn('AI question generation returned no usable payload', { provider: provider.id });
+    onFailure?.('the model did not return a usable question (invalid, unparseable, or empty response)');
+    return undefined;
+  }
 
   const body: QuestionBody =
     payload.kind === 'multiple-choice'

@@ -9,7 +9,6 @@ import type {
   AIQuestionContext,
 } from './AITypes';
 import type { OpenAIModel } from '../storage/StorageSchema';
-import { getLogger } from '../../utils/logger';
 
 const MAX_COMPLETION_TOKENS = 1024;
 
@@ -42,20 +41,19 @@ export class OpenAIProvider implements AIProvider {
     return validateEvaluationPayload(extractJsonObject(text));
   }
 
+  // Deliberately no try/catch here: callers (tryGenerateAIQuestion,
+  // HybridEvaluator) need the real error — a generic "request failed" with
+  // no detail makes an auth/network/rate-limit problem indistinguishable
+  // from "the model declined", and is impossible to diagnose from logs.
   private async send(system: string, user: string): Promise<string | undefined> {
-    try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        max_completion_tokens: MAX_COMPLETION_TOKENS,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      });
-      return response.choices[0]?.message?.content ?? undefined;
-    } catch (err) {
-      getLogger().warn('OpenAI API request failed', { error: String(err) });
-      return undefined;
-    }
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      max_completion_tokens: MAX_COMPLETION_TOKENS,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    });
+    return response.choices[0]?.message?.content ?? undefined;
   }
 }

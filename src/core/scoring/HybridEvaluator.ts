@@ -42,10 +42,13 @@ export class HybridEvaluator implements Evaluator {
         developerAnswer: answer.text ?? '',
       });
       if (payload) return payload;
+      getLogger().warn('AI evaluation returned no usable payload, falling back to deterministic', {
+        provider: provider.id,
+      });
     } catch (err) {
       getLogger().warn('AI evaluation failed, falling back to deterministic', {
         provider: provider.id,
-        error: String(err),
+        error: err instanceof Error ? err.message : String(err),
       });
     }
 

@@ -9,7 +9,6 @@ import type {
   AIQuestionContext,
 } from './AITypes';
 import type { AnthropicModel } from '../storage/StorageSchema';
-import { getLogger } from '../../utils/logger';
 
 const MAX_TOKENS = 1024;
 
@@ -41,19 +40,18 @@ export class AnthropicProvider implements AIProvider {
     return validateEvaluationPayload(extractJsonObject(text));
   }
 
+  // Deliberately no try/catch here: callers (tryGenerateAIQuestion,
+  // HybridEvaluator) need the real error — a generic "request failed" with
+  // no detail makes an auth/network/rate-limit problem indistinguishable
+  // from "the model declined", and is impossible to diagnose from logs.
   private async send(system: string, user: string): Promise<string | undefined> {
-    try {
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: MAX_TOKENS,
-        system,
-        messages: [{ role: 'user', content: user }],
-      });
-      const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-      return block?.text;
-    } catch (err) {
-      getLogger().warn('Anthropic API request failed', { error: String(err) });
-      return undefined;
-    }
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: MAX_TOKENS,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+    return block?.text;
   }
 }
