@@ -204,11 +204,13 @@ src/
       AIProviderResolver.ts        Decides which AI provider(s) to try, in what order
       BaseAIProvider.ts             Shared "last raw response" diagnostic helper
       VsCodeLmProvider.ts           Uses vscode.lm (Copilot/other chat models)
+      ClaudeCliProvider.ts          Shells out to the Claude Code CLI (existing Claude auth)
       AnthropicProvider.ts          Manual API-key fallback (Claude)
       OpenAIProvider.ts             Manual API-key fallback (GPT)
       GeminiProvider.ts             Manual API-key fallback (Gemini)
       pickPreferredModel.ts         Chooses best vscode.lm model when several exist
       classifyProviderError.ts      Retryable vs dead error (bad key / quota / retired model)
+      summarizeProviderError.ts     Condenses a wall-of-JSON provider error to one line
       prompts.ts                    Shared system/user prompt templates (+ injection defense)
       parseAIResponse.ts             Strict JSON extraction/validation of model output
     badges/
@@ -625,10 +627,23 @@ There is **no deterministic/template fallback stage.** `ChallengeProvider.explai
 `AIProviderResolver.resolveCandidatesOrPrompt()` returns an **ordered list**, not a single winner:
 
 ```text
-1. A specifically-identified coding agent via vscode.lm (Claude/Codex-named model) — most trusted
-2. Any manually configured API key, in this fixed order: Anthropic → OpenAI → Gemini
-3. A generic/router vscode.lm match (e.g. Copilot's "Auto") — LAST, and only if nothing else exists
+1. The Claude Code CLI (ClaudeCliProvider) — existing Claude auth, no key, nothing to exhaust
+2. A specifically-identified coding agent via vscode.lm (Claude/Codex-named model)
+3. Any manually configured API key, in this fixed order: Anthropic → OpenAI → Gemini
+4. A generic/router vscode.lm match (e.g. Copilot's "Auto") — LAST, and only if nothing else exists
 ```
+
+**Why the Claude Code CLI is a provider at all.** The official Claude VS Code extension contributes only `configuration`, `jsonValidation`, `commands`, `keybindings`, `viewsContainers`, `views`, `walkthroughs`, and `menus` — there is **no `languageModels` contribution**, so unlike GitHub Copilot Chat it publishes nothing to `vscode.lm` and cannot be borrowed through that API no matter what Codora does. What it *does* ship is a CLI binary, and that is reachable.
+
+`ClaudeCliProvider` runs it via `execFile` (argument array, never a shell, so nothing in the embedded code snippet can be interpreted as a command) with:
+- `--print` for non-interactive output
+- `--disallowed-tools Bash Edit Write Read Glob Grep WebFetch WebSearch NotebookEdit Task TodoWrite` — keeping it a single-shot text transform. Codora already supplies the exact snippet to reason about; an agentic run would be slower, less predictable, and would block on permission prompts that print mode can't answer. A deny list is the fail-safe direction: an unknown tool name is ignored, whereas a typo'd allow list could permit everything.
+- `cwd` set to a temp directory, so the CLI has no project to wander into
+- a 60s timeout, since a CLI round trip includes process startup
+
+Discovery prefers `claude` on `PATH` (the supported, stable location), and only then falls back to the copy bundled in the extension at `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude` (also checking `.vscode-insiders` and `.vscode-server` roots). **That fallback path is not a public contract** — a future extension version could move or drop it — so it is deliberately last, version-globbed rather than pinned, and fails soft to "provider unavailable". `pickNewestClaudeExtensionDir()` compares version segments numerically (unit-tested), because plain lexicographic sorting ranks `2.1.9` above `2.1.269` and would pin an older CLI after an upgrade.
+
+Trade-off accepted: this consumes the developer's Claude subscription usage and costs a process spawn per question (seconds, versus ~1s for an HTTP call), in exchange for needing no API key and having no separate quota to run out of.
 The code comment explains why a generic router is placed *behind* a manual key rather than in front of it: a direct API key reliably follows the "respond with only JSON" instruction, whereas a generic router model has been observed silently returning empty/unparseable output for this non-chat, structured task.
 
 Every provider in the list is given its own real attempt budget before falling through — a `vscode.lm` model resolving successfully (a handle exists) does not guarantee it produces usable output, so a manually configured key still gets tried.
@@ -1432,6 +1447,7 @@ Vitest (`vitest.config.ts`: `test/**/*.test.ts`). Tests mirror `src/core/**` str
 | `test/core/context/CodeContextExtractor.test.ts` | Function/guard-clause/loop/validation extraction (largest suite, 21 cases) |
 | `test/core/questions/questionFingerprint.test.ts` | Fingerprint identity/equality |
 | `test/core/ai/classifyProviderError.test.ts` | Retryable vs dead provider errors (401/429/404) |
+| `test/core/ai/claudeCliDiscovery.test.ts` | Newest-version selection for the bundled Claude CLI |
 | `test/core/scoring/Evaluator.test.ts` | Deterministic multiple-choice/free-text evaluation |
 | `test/core/scoring/ScoreEngine.test.ts` | Rolling-score EMA math, Aura computation |
 | `test/core/scoring/StreakEngine.test.ts` | Streak increment/decay/timezone-day logic |

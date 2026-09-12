@@ -36,17 +36,20 @@ export interface AIEvaluationPayload {
 }
 
 /**
- * A source of AI-generated questions and evaluations. Four
- * implementations exist: VsCodeLmProvider (whatever chat model the
- * developer already has, e.g. GitHub Copilot), and three manual-API-key
- * fallbacks — AnthropicProvider, OpenAIProvider, and GeminiProvider — used
- * only when no VS Code Language Model is available, or when it's
- * available but not actually producing usable output. All are optional —
- * QuestionEngine and the scoring layer work fully offline without any of
- * them.
+ * A source of AI-generated questions and evaluations. Five implementations
+ * exist, tried in the order AIProviderResolver decides:
+ *
+ * - ClaudeCliProvider — the Claude Code CLI, running on the developer's
+ *   existing Claude auth (no API key). Preferred when present.
+ * - VsCodeLmProvider — whatever chat model the editor publishes via
+ *   `vscode.lm` (e.g. GitHub Copilot Chat).
+ * - AnthropicProvider / OpenAIProvider / GeminiProvider — manual API keys.
+ *
+ * All are optional. Question generation needs at least one (there is no
+ * local-template fallback), while answer scoring degrades locally.
  */
 export interface AIProvider {
-  readonly id: 'vscode-lm' | 'anthropic' | 'openai' | 'gemini';
+  readonly id: 'claude-cli' | 'vscode-lm' | 'anthropic' | 'openai' | 'gemini';
   readonly label: string;
   generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;

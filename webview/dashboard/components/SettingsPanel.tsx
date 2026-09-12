@@ -154,11 +154,12 @@ function intervalLabel(opt: CodoraSettings['challengeInterval']): string {
 
 function aiStatusLabel(status: AIStatus): string {
   switch (status) {
+    case 'claude-cli': return 'Using the Claude Code CLI (your existing Claude sign-in)';
     case 'vscode-lm': return 'Using a VS Code Language Model (e.g. GitHub Copilot)';
     case 'anthropic': return 'Using a manually configured Anthropic API key';
     case 'openai': return 'Using a manually configured OpenAI API key';
     case 'gemini': return 'Using a manually configured Gemini API key';
-    case 'none-configured': return 'Not configured — falling back to local deterministic challenges';
-    case 'disabled': return 'Disabled — using local deterministic challenges only';
+    case 'none-configured': return 'Not configured — no challenges can be generated';
+    case 'disabled': return 'Disabled — no challenges will be offered';
   }
 }

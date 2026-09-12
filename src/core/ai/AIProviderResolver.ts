@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { VsCodeLmProvider } from './VsCodeLmProvider';
+import { ClaudeCliProvider } from './ClaudeCliProvider';
 import { AnthropicProvider } from './AnthropicProvider';
 import { OpenAIProvider } from './OpenAIProvider';
 import { GeminiProvider } from './GeminiProvider';
@@ -11,7 +12,14 @@ const SECRET_KEY_ANTHROPIC = 'codora.anthropicApiKey';
 const SECRET_KEY_OPENAI = 'codora.openaiApiKey';
 const SECRET_KEY_GEMINI = 'codora.geminiApiKey';
 
-export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'gemini' | 'none-configured' | 'disabled';
+export type AIStatus =
+  | 'claude-cli'
+  | 'vscode-lm'
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'none-configured'
+  | 'disabled';
 
 /** Providers configured by pasting an API key (i.e. everything except the VS Code Language Model). */
 export type ManualProviderId = 'anthropic' | 'openai' | 'gemini';
@@ -43,11 +51,12 @@ const KEY_HINTS = {
  * resolve successfully (a model handle exists) while still failing to
  * produce usable output for reasons that have nothing to do with
  * availability (content filtering, a model that won't follow the
- * JSON-only instruction, etc.). Priority is: a specifically-identified
- * coding agent (Claude/Codex) first, then any manually configured key,
- * then a generic/router vscode.lm match (e.g. Copilot's "Auto") last —
- * see resolveCandidates for why that generic case is untrusted enough to
- * go behind a manual key rather than in front of it.
+ * JSON-only instruction, etc.). Priority is: the Claude Code CLI (runs on
+ * the developer's existing Claude auth, no key, nothing to exhaust), then
+ * a specifically-identified coding agent published via vscode.lm, then any
+ * manually configured key, then a generic/router vscode.lm match (e.g.
+ * Copilot's "Auto") last — see resolveCandidates for why that generic case
+ * is untrusted enough to go behind a manual key rather than in front.
  */
 export class AIProviderResolver {
   constructor(
@@ -60,8 +69,13 @@ export class AIProviderResolver {
     const settings = this.storage.getGlobalProfile().settings;
     if (!settings.ai.enabled) return [];
 
+    // Preferred outright when present: it's a first-party coding model
+    // running on the developer's existing Claude auth, so it needs no key
+    // and has no separate per-token bill to exhaust.
+    const claudeCli = ClaudeCliProvider.resolve();
     const lm = await VsCodeLmProvider.resolve();
     const manual = await this.getConfiguredManualProviders(settings.ai);
+    const cli = claudeCli ? [claudeCli] : [];
 
     // A specifically-identified coding agent (Claude, Codex) is trustworthy
     // and preferred outright. A generic/router match — in practice,
@@ -71,8 +85,8 @@ export class AIProviderResolver {
     // empty or unparseable output for this kind of non-chat, structured
     // task. Without this, a manually configured key could sit completely
     // unused behind a generic match that never actually works.
-    if (lm?.isKnownAgent) return [lm, ...manual];
-    return [...manual, ...(lm ? [lm] : [])];
+    if (lm?.isKnownAgent) return [...cli, lm, ...manual];
+    return [...cli, ...manual, ...(lm ? [lm] : [])];
   }
 
   /**

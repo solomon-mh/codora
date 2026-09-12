@@ -104,7 +104,7 @@ export class ChallengeProvider {
       return {
         title: 'No AI provider configured',
         detail:
-          "Codora needs an AI model to write questions about your code. Pick one below — keys are stored in VS Code's secret storage, never in settings and never logged.",
+          "Codora needs an AI model to write questions about your code. If you have Claude Code installed, it's picked up automatically with no key needed — otherwise pick one below. Keys are stored in VS Code's secret storage, never in settings and never logged.",
         setupOptions: await this.buildSetupOptions(),
       };
     }
@@ -141,7 +141,7 @@ export class ChallengeProvider {
     return [
       {
         label: 'Use AI already in VS Code',
-        hint: 'GitHub Copilot Chat or any extension providing a chat model — no key needed',
+        hint: 'Claude Code, GitHub Copilot Chat, or any extension publishing a chat model — no key needed',
         kind: 'setup-vscode-lm',
         alreadyConfigured: configured.has('vscode-lm'),
       },
