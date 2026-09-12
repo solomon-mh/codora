@@ -1,6 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
-  <path d="M8 1.2c-2.6 0-4.6 2-4.6 4.4 0 1.3.6 2.4 1.5 3.2-.2.5-.5 1-.9 1.4-.2.2-.1.6.2.7.9.2 1.9 0 2.6-.5.4.1.8.1 1.2.1 2.6 0 4.6-2 4.6-4.4S10.6 1.2 8 1.2z"/>
-  <circle cx="6" cy="5.6" r="0.7"/>
-  <circle cx="10" cy="5.6" r="0.7"/>
-  <path d="M6 8c.5.5 1.2.8 2 .8s1.5-.3 2-.8" stroke="currentColor" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!--
+    Codora's mark: a spark of understanding held inside code braces.
+
+    Braces read unambiguously as "code" at any size, and the spark carries
+    the comprehension/"aura" idea (matching the ✨ used for AI-generated
+    questions in the challenge UI). Everything is currentColor so VS Code
+    can recolor it for active/inactive activity-bar states.
+
+    Shape choices were made by rendering candidates at the sizes the
+    activity bar actually uses (16/24px), not by eye at full size:
+    - Strokes for the braces, one solid shape for the spark: at 16px a
+      thinner spark turns to mush and a second small sparkle (the usual
+      "AI" motif) collides with the right brace into noise.
+    - The spark is taller than wide and deliberately kept clear of the
+      brace pinch — a wider one merges with the braces into a single blob
+      once antialiased down to 16px.
+  -->
+  <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.2 4.2C7.4 4.2 7.4 5.6 7.4 7.2 7.4 9.2 6.1 10.9 4.6 12 6.1 13.1 7.4 14.8 7.4 16.8 7.4 18.4 7.4 19.8 9.2 19.8" />
+    <path d="M14.8 4.2C16.6 4.2 16.6 5.6 16.6 7.2 16.6 9.2 17.9 10.9 19.4 12 17.9 13.1 16.6 14.8 16.6 16.8 16.6 18.4 16.6 19.8 14.8 19.8" />
+  </g>
+  <path fill="currentColor" d="M12 7.1 13.35 10.65 15.8 12 13.35 13.35 12 16.9 10.65 13.35 8.2 12 10.65 10.65Z" />
 </svg>
