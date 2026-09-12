@@ -1,12 +1,53 @@
 import * as vscode from 'vscode';
 import { getWebviewHtml } from './webviewHtml';
 import { CodoraController } from '../core/CodoraController';
-import type { ChallengeToExtensionMessage, ExtensionToChallengeMessage } from '../../webview/shared/messages';
+import type {
+  ChallengeToExtensionMessage,
+  ChallengeUnavailable,
+  ChallengeUnavailableAction,
+  ExtensionToChallengeMessage,
+} from '../../webview/shared/messages';
+import type { GeneratedQuestion } from '../core/questions/QuestionTypes';
 import { getLogger } from '../utils/logger';
+
+/** What the panel should display once its webview signals 'ready'. */
+type PendingView =
+  | { kind: 'question'; question: GeneratedQuestion }
+  | { kind: 'unavailable'; payload: ChallengeUnavailable };
+
+const MAX_REASON_CHARS = 220;
+
+/**
+ * Provider errors are frequently a wall of JSON (a Gemini quota error is
+ * ~1.5KB of nested detail). Pull out the human-readable `message` when the
+ * error is JSON, and cap the length either way — the full text is always in
+ * the output channel, which the panel links to.
+ */
+function summarizeReason(reason: string | undefined): string {
+  if (!reason) return 'no usable question returned';
+
+  let text = reason;
+  const jsonStart = reason.indexOf('{');
+  if (jsonStart !== -1) {
+    try {
+      const parsed = JSON.parse(reason.slice(jsonStart)) as { error?: { message?: string; status?: string } };
+      const message = parsed.error?.message;
+      if (message) {
+        const prefix = reason.slice(0, jsonStart).trim();
+        text = prefix ? `${prefix} ${message}` : message;
+      }
+    } catch {
+      // Not JSON after all — fall through and just truncate the raw text.
+    }
+  }
+
+  text = text.replace(/\s+/g, ' ').trim();
+  return text.length > MAX_REASON_CHARS ? `${text.slice(0, MAX_REASON_CHARS)}…` : text;
+}
 
 export class ChallengeProvider {
   private panel: vscode.WebviewPanel | undefined;
-  private currentQuestion: import('../core/questions/QuestionTypes').GeneratedQuestion | undefined;
+  private pendingView: PendingView | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -15,14 +56,14 @@ export class ChallengeProvider {
 
   async open(): Promise<void> {
     const question = await this.controller.generateChallenge();
-    if (!question) {
-      // There is deliberately no local-template fallback, so "no question"
-      // needs to say which of the possible causes it was and offer the
-      // action that fixes it, rather than a vague "not enough context".
-      await this.explainNoChallenge();
-      return;
-    }
-    this.currentQuestion = question;
+    // Question generation is AI-only, so "no question" is a normal,
+    // explainable outcome rather than an error — it gets shown in the panel
+    // where the question would be, with the action that fixes it.
+    this.show(question ? { kind: 'question', question } : { kind: 'unavailable', payload: await this.describeUnavailable() });
+  }
+
+  private show(view: PendingView): void {
+    this.pendingView = view;
 
     if (!this.panel) {
       this.panel = vscode.window.createWebviewPanel(
@@ -35,61 +76,90 @@ export class ChallengeProvider {
       this.panel.webview.onDidReceiveMessage((message: ChallengeToExtensionMessage) => this.handleMessage(message));
       this.panel.onDidDispose(() => {
         this.panel = undefined;
+        this.pendingView = undefined;
       });
       // Don't post yet: the webview's page hasn't loaded and attached its
       // message listener at this point, so a message sent now would be
       // silently dropped. It sends 'ready' once it's actually listening.
+      return;
+    }
+
+    // An existing, already-loaded webview won't re-fire 'ready' just
+    // because it's revealed again, so post directly here instead.
+    this.panel.reveal(vscode.ViewColumn.Beside);
+    this.postPendingView();
+  }
+
+  private postPendingView(): void {
+    const view = this.pendingView;
+    if (!view) return;
+    if (view.kind === 'question') {
+      this.post({ type: 'question', payload: view.question });
     } else {
-      // An existing, already-loaded webview won't re-fire 'ready' just
-      // because it's revealed again, so post directly here instead.
-      this.panel.reveal(vscode.ViewColumn.Beside);
-      this.postQuestion(question);
+      this.post({ type: 'unavailable', payload: view.payload });
     }
   }
 
   /**
-   * Explains why no challenge could be offered, and offers the action that
-   * resolves it. Codora only asks questions an AI model actually derived
-   * from the code, so "no AI available" means "no challenge" — and the
-   * user needs to know which case they're in rather than seeing a generic
-   * message that looks the same whether AI is unconfigured, out of quota,
-   * or the workspace simply has nothing to ask about.
+   * Turns "no question could be generated" into the specific cause plus the
+   * action that resolves it. The three cases look identical to a user
+   * otherwise, but need completely different fixes: AI switched off in
+   * settings, no provider configured at all, or configured providers that
+   * all failed (an exhausted quota being the common one).
    */
-  private async explainNoChallenge(): Promise<void> {
+  private async describeUnavailable(): Promise<ChallengeUnavailable> {
     const status = await this.controller.getAIStatus();
 
     if (status === 'disabled') {
-      const choice = await vscode.window.showWarningMessage(
-        'Codora: AI-assisted challenges are turned off, and Codora only asks questions an AI model derived from your code — so no challenge can be offered. Turn it back on in Settings.',
-        'Open Settings',
-      );
-      if (choice === 'Open Settings') await vscode.commands.executeCommand('codora.openDashboard');
-      return;
+      return {
+        title: 'AI-assisted challenges are turned off',
+        detail:
+          'Codora only asks questions an AI model actually derived from your code, so it has nothing to ask while AI is disabled. Re-enable it in Settings to start getting challenges again.',
+        action: { label: 'Open Settings', kind: 'open-settings' },
+      };
     }
 
     if (status === 'none-configured') {
-      const choice = await vscode.window.showWarningMessage(
-        'Codora: no AI provider is configured, so there is nothing to generate a challenge with. Configure one to start getting challenges.',
-        'Configure AI Provider',
-      );
-      if (choice === 'Configure AI Provider') await vscode.commands.executeCommand('codora.configureAI');
-      return;
+      return {
+        title: 'No AI provider configured',
+        detail:
+          "Codora needs an AI model to write questions about your code. Use whatever you already have in VS Code (e.g. GitHub Copilot Chat), or add an Anthropic, OpenAI, or Gemini API key — it's stored locally in VS Code's secret storage.",
+        action: { label: 'Configure AI Provider', kind: 'configure-ai' },
+      };
     }
 
-    const choice = await vscode.window.showWarningMessage(
-      'Codora: none of your configured AI providers could produce a challenge right now (for example an exhausted quota, or no meaningful recent code changes to ask about). Nothing was asked rather than falling back to a canned question.',
-      'Show Details',
-    );
-    if (choice === 'Show Details') await vscode.commands.executeCommand('codora.showOutput');
+    // Report what the providers actually said, rather than guessing at the
+    // cause — an exhausted quota and a model that won't return JSON need
+    // very different responses from the user.
+    const failures = this.controller.getLastAIFailures();
+    const reported = failures
+      .map((f) => `• ${f.provider}: ${summarizeReason(f.reason)}`)
+      .join('\n');
+
+    return {
+      title: 'No provider could generate a challenge right now',
+      detail: reported
+        ? `Every configured AI provider was tried:\n\n${reported}\n\nNothing was asked rather than falling back to a canned question.`
+        : 'Every configured AI provider was tried and none returned a usable question. This can also mean there were no meaningful recent code changes to ask about.',
+      action: { label: 'Show Logs', kind: 'show-logs' },
+    };
   }
 
   private async handleMessage(message: ChallengeToExtensionMessage): Promise<void> {
     if (message.type === 'ready') {
-      if (this.currentQuestion) this.postQuestion(this.currentQuestion);
+      this.postPendingView();
       return;
     }
     if (message.type === 'close') {
       this.panel?.dispose();
+      return;
+    }
+    if (message.type === 'retry') {
+      await this.open();
+      return;
+    }
+    if (message.type === 'action') {
+      await this.runUnavailableAction(message.payload);
       return;
     }
     if (message.type === 'submitAnswer') {
@@ -100,7 +170,7 @@ export class ChallengeProvider {
           payload: { evaluation: result.evaluation, auraDelta: result.auraDelta },
         });
         if (result.followUp) {
-          this.currentQuestion = result.followUp;
+          this.pendingView = { kind: 'question', question: result.followUp };
           setTimeout(() => this.post({ type: 'followUp', payload: result.followUp! }), 1200);
         }
       } catch (err) {
@@ -109,8 +179,22 @@ export class ChallengeProvider {
     }
   }
 
-  private postQuestion(question: import('../core/questions/QuestionTypes').GeneratedQuestion): void {
-    this.post({ type: 'question', payload: question });
+  private async runUnavailableAction(action: ChallengeUnavailableAction): Promise<void> {
+    switch (action) {
+      case 'configure-ai':
+        await vscode.commands.executeCommand('codora.configureAI');
+        // Configuring a provider is the fix for this panel's current state,
+        // so re-run generation immediately rather than making the user
+        // trigger another challenge by hand.
+        await this.open();
+        return;
+      case 'open-settings':
+        await vscode.commands.executeCommand('codora.openDashboard');
+        return;
+      case 'show-logs':
+        await vscode.commands.executeCommand('codora.showOutput');
+        return;
+    }
   }
 
   private post(message: ExtensionToChallengeMessage): void {

@@ -89,7 +89,8 @@ Interval reached → CodoraController.generateChallenge()
       ↓
 QuestionEngine gathers candidate files (git diff, or recently-modified files)
       ↓
-AI provider (if configured) or a deterministic template writes a question
+An AI provider writes a question from a bounded code snippet
+   (no provider succeeds → no challenge is offered, and the reason is shown)
       ↓
 ChallengeProvider shows it in a webview panel
       ↓
@@ -106,7 +107,11 @@ StorageManager persists the full ChallengeRecord (question+answer+evaluation)
 Dashboard/Sidebar re-render from the updated data
 ```
 
-This is a **V1 core-loop build**. Per the project's own `README.md`: session tracking, workspace/git/AI-instruction context gathering, deterministic (template-based) question generation, scoring, streaks, and badges are fully wired to real local data. AI-backed question generation and free-text evaluation exist and are wired in, but are an *optional enhancement* layered on top of a fully-working deterministic path — never a requirement. A public leaderboard and cloud sync do not exist in this codebase at all (see [§41](#41-future-cloud-architecture)/[§42](#42-future-leaderboard-architecture)).
+This is a **V1 core-loop build**. Session tracking, workspace/git/AI-instruction context gathering, AI-backed question generation and free-text evaluation, scoring, streaks, and badges are all wired to real local data.
+
+**Question generation is AI-only.** Codora originally shipped eight local deterministic question templates as a fallback for when no AI was available; those were removed (see [§13](#13-question-engine)). A challenge is now always a model's actual reading of the developer's code, and when no configured provider can produce one, **no challenge is offered** and the specific reason is surfaced instead. Answer *evaluation* still degrades locally — multiple choice is always exact-matched in-process, and `DeterministicEvaluator` backs up free-text scoring if a provider fails mid-challenge.
+
+A public leaderboard and cloud sync do not exist in this codebase at all (see [§41](#41-future-cloud-architecture)/[§42](#42-future-leaderboard-architecture)).
 
 ---
 
@@ -115,8 +120,9 @@ This is a **V1 core-loop build**. Per the project's own `README.md`: session tra
 These principles are visible directly in the code, not just stated intent:
 
 - **Local-first.** All persisted state lives in VS Code's `globalState`/`workspaceState`/`SecretStorage`. There is no network call anywhere in the codebase except to an AI provider (VS Code's Language Model API, or a manually configured Anthropic/OpenAI/Gemini key), and only when the user has explicitly enabled and configured that.
-- **Context-first.** Every question template (`src/core/questions/templates/*.ts`) requires a real, extractable fact from actual code (a guard clause, a return statement, a nested loop, a directory-role marker, a git diff) — never a generic/templated-but-unfounded question.
-- **Skip rather than guess.** Every template function returns `undefined` when it can't find a defensible fact, and `QuestionEngine` treats "no template produced anything" as "skip this challenge," never "ask something generic." This is enforced literally: `ChallengeProvider.open()` shows an information message ("not enough project context yet for a good challenge") and does not open a panel when `generateChallenge()` resolves to `undefined`.
+- **Context-first.** A question is always generated from a bounded snippet of the developer's *own* recently-touched code (`AIQuestionGenerator` sends the touched function body, or a capped slice of the file, never the repository). The generation prompt instructs the model to base both question and answer only on that snippet, and to return `{"skip": true}` rather than invent behavior the code doesn't show.
+- **Skip rather than guess.** `QuestionEngine` treats "no provider produced a usable question" as "offer no challenge," never "ask something generic." This is why the local templates were removed rather than kept as a safety net: a canned question that happens to fit any file is exactly the "generic/unfounded question" this principle exists to prevent. `ChallengeProvider.explainNoChallenge()` then reports the specific cause (AI disabled / nothing configured / every provider failed) with the action that fixes it, and opens no panel.
+- **Honest about its own failures.** A model returning an empty response, an exhausted quota, and a mis-pasted key are all distinct, separately-reported outcomes; none of them silently degrade into a lower-quality question presented as if it were the real thing (see [§30](#30-error-handling)).
 - **AI-neutral.** Codora never asks "did you use AI to write this" and has no code path that could answer that question. It only asks "do you understand what this code does."
 - **Minimal collection.** `SessionManager` listens to `onDidChangeTextDocument`/`onDidSaveTextDocument`/terminal-open events — never raw keystrokes, never clipboard, never terminal output content.
 - **Failure tolerant.** A missing git repo (`GitAnalyzer.analyzeGit` returns `{available: false}`), a missing/absent AI-instruction file (`AIContextScanner` returns `[]`), an unsupported language (`extractFunctions` returns `[]` for anything but JS/TS/Python), or a failing AI provider (`HybridEvaluator`/`QuestionEngine.tryAI`) — none of these throw or crash the extension; each has an explicit fallback path.
@@ -158,7 +164,7 @@ These principles are visible directly in the code, not just stated intent:
                                            return statements, loops…)
                           │
                           ▼
-                    Question templates (8) ── or ── AIQuestionGenerator
+                    AIQuestionGenerator  (AI-only; no template fallback)
                           │
                           ▼
                 ┌───────────────────────────┐
@@ -202,6 +208,7 @@ src/
       OpenAIProvider.ts             Manual API-key fallback (GPT)
       GeminiProvider.ts             Manual API-key fallback (Gemini)
       pickPreferredModel.ts         Chooses best vscode.lm model when several exist
+      classifyProviderError.ts      Retryable vs dead error (bad key / quota / retired model)
       prompts.ts                    Shared system/user prompt templates (+ injection defense)
       parseAIResponse.ts             Strict JSON extraction/validation of model output
     badges/
@@ -212,15 +219,11 @@ src/
       AIContextScanner.ts           Discovers CLAUDE.md/AGENTS.md/etc. (NOT currently consumed)
       CodeContextExtractor.ts       Regex/brace-matching function & pattern extraction
     questions/
-      QuestionEngine.ts             Orchestrates candidate building + AI/template generation
-      QuestionGenerator.ts          Deterministic template dispatch table
-      QuestionTypes.ts              QuestionType/ChallengeCategory/GeneratedQuestion types
-      QuestionDifficulty.ts         pickDifficulty() — used only on the AI-generation path
+      QuestionEngine.ts             Orchestrates candidate building + AI generation per provider
+      QuestionTypes.ts              QuestionType/ChallengeCategory/GeneratedQuestion/FileContext types
+      QuestionDifficulty.ts         pickDifficulty() — targets difficulty for the AI prompt
       questionFingerprint.ts        (type, file, function) identity for repeat-avoidance
       AIQuestionGenerator.ts        Turns an AIProvider response into a GeneratedQuestion
-      templates/
-        recall.ts / prediction.ts / cause.ts / debugging.ts / architecture.ts /
-        testing.ts / security.ts / performance.ts   8 deterministic template functions
     scoring/
       ScoreTypes.ts                  ScoreCategory, RollingScore, EvaluationResult types
       ScoreEngine.ts                 updateRollingScore(), computeAura(), auraLabel()
@@ -599,22 +602,23 @@ categoryOrder = weightedCategoryOrder(enabledCategories, categoryScores)
        being tried first — weight = max(5, 100 - value) once ≥1 sample exists,
        else a flat 50 for never-tried categories)
       ↓
-FOR EACH configured AI provider, in priority order (§13.1):
+PASS 1 — avoid repeats. FOR EACH configured AI provider, in priority order (§13.1):
       tryAI(provider, candidates, categoryOrder, options, recentFingerprints)
          → iterates categoryOrder × (question types in that category) × candidates,
-           skipping any (type, file, function) already in recentFingerprints,
-           up to MAX_AI_ATTEMPTS_PER_PROVIDER = 3 real attempts total for that provider
+           skipping any (type, file, function) already in recentFingerprints
+           (the last 10 answered challenges),
+           up to MAX_AI_ATTEMPTS_PER_PROVIDER = 3 real attempts for that provider
+         → a NON-RETRYABLE provider error (§13.3) abandons that provider at once,
+           well before the 3-attempt cap
          → first successful AIQuestionGenerator result wins immediately
-      if a provider produces a question → return it (no further providers/templates tried)
-      ↓ (no AI provider configured, or all exhausted their 3 attempts without success)
-tryDeterministic(candidates, categoryOrder, options, recentFingerprints)   — first pass,
-      avoiding repeats of the last 10 challenges (questionFingerprint-based)
-      ↓ nothing found AND recentFingerprints was non-empty?
-tryDeterministic(..., undefined)   — second pass, WITHOUT the repeat-avoidance filter
-      (a repeat is better than the challenge silently never firing)
+      ↓ (every provider exhausted without success)
+PASS 2 — allow a repeat. Same loop over the same providers with no fingerprint filter,
+      but only if recentFingerprints was non-empty (a repeat beats no challenge)
       ↓ still nothing?
-return undefined  (log: "No template produced a confident question — skipping challenge")
+return undefined  (log: "No AI provider produced a question — no challenge will be offered")
 ```
+
+There is **no deterministic/template fallback stage.** `ChallengeProvider.explainNoChallenge()` turns that `undefined` into a specific, actionable message rather than a canned question (see [§16](#16-challenge-delivery)).
 
 ### 13.1 AI provider priority (resolved once per challenge in `CodoraController.generateChallenge`)
 
@@ -639,26 +643,40 @@ value >= 75             → hard
 value >= 55             → medium
 else                     → easy
 ```
-**Verified scope limitation:** this function is called only inside `QuestionEngine.tryAI` (to tell an AI provider what difficulty to target). The 8 deterministic templates each hardcode their own fixed difficulty in their returned `GeneratedQuestion` (recall=`easy`, prediction/cause/debugging/testing=`medium`, architecture/security/performance=`hard`) and never call `pickDifficulty`. So "adaptive difficulty" currently only affects AI-generated questions, not the local-template path — a real, code-verified nuance, not a design choice this document is guessing at.
+It is called inside `QuestionEngine.tryAI` and passed to the generation prompt as the difficulty the model should target. Since generation is now AI-only, adaptive difficulty applies to every question Codora asks. (Historically it applied only to the AI path, because the removed templates each hardcoded a fixed difficulty — that caveat no longer exists.)
+
+### 13.3 Non-retryable provider errors
+
+`classifyProviderError.isRetryableProviderError(error)` decides whether re-sending the same request could plausibly succeed. These are treated as **dead** and abandon that provider immediately:
+
+| Signal in the error | Why retrying is pointless |
+| --- | --- |
+| `401`, `403`, `unauthorized`, `incorrect api key` | needs a different key, not another attempt |
+| `429`, `quota`, `rate limit`, `resource_exhausted` | the reported retry delay far exceeds a challenge cycle |
+| `404`, `not_found`, `no longer available` | a retired/unknown model id fails identically every time |
+
+This exists because the diagnostic logs showed three *identical* 401s and three *identical* 429s per challenge — on a 20-request/day free tier, the retries burned the quota three times faster than necessary. A malformed-but-parseable response is still treated as retryable, since a different code snippet may well produce valid output.
 
 ---
 
 ## 14. Question Types
 
-All 8 are implemented — none are "planned only." Each deterministic template lives in `src/core/questions/templates/` and follows the same `(ctx: TemplateContext) => GeneratedQuestion | undefined` contract.
+The 8 types in `ALL_QUESTION_TYPES` (`QuestionTypes.ts`) are now *targets given to a model*, not distinct code paths. `QuestionEngine` walks category → type → candidate and tells `AIQuestionGenerator` which type to write; the model receives the type name in the prompt and must produce a question of that kind, grounded in the supplied snippet.
 
-| Type | Category | Answer kind | Requires | Fixed difficulty | Signal it looks for |
-|---|---|---|---|---|---|
-| `recall` | recall | multiple-choice | a function with ≥1 `return` statement | easy | `extractReturnStatements` — the actual first return expression becomes the correct option |
-| `prediction` | reasoning | multiple-choice | a function with ≥1 param and a guard clause | medium | `extractGuardClauses` — "what happens if `x` is missing" |
-| `cause` | reasoning | free-text | any file (fn optional) | medium | function/file name + non-stopword words from the last commit message, used as rubric keywords |
-| `debugging` | debugging | multiple-choice | a guard-free property access on a function param | medium | `extractGuardClauses` + `findUnguardedPropertyAccess` |
-| `architecture` | architecture | multiple-choice | file path matches a role directory (`services/`, `controllers/`, `components/`, `models/`, `middlewares/`, `repositor(y\|ies)/`, `utils/`) | hard | `detectDirectoryRole` — a fixed rationale string per role |
-| `testing` | testing | multiple-choice | a matched test file with ≥2 `it/test/describe` descriptions, and a guard clause not mentioned by name in any of them | medium | `extractTestDescriptions` + `extractGuardClauses` |
-| `security` | security | multiple-choice | a function body containing a validation/auth keyword (`validate`, `sanitize`, `escape`, `authenticate`, `authorize`, `verify`, `isAuthorized`) | hard | `findValidationPatterns` |
-| `performance` | performance | multiple-choice | a function body with two loop keywords where the second is nested inside the first's braces | hard | `hasNestedLoop` |
+| Type | Category | What the model is asked to probe |
+|---|---|---|
+| `recall` | recall | what this code actually does/returns |
+| `prediction` | reasoning | what happens under a specific input/condition |
+| `cause` | reasoning | why the change/behavior exists |
+| `debugging` | debugging | which condition produces a failure |
+| `architecture` | architecture | why the logic lives in this layer |
+| `testing` | testing | which edge case is/isn't covered |
+| `security` | security | what risk a removed check would create |
+| `performance` | performance | what becomes expensive at scale |
 
-`cause` is the only deterministic template that produces a **free-text** question; all seven others are multiple-choice. AI-generated questions (`AIQuestionGenerator.ts`) may be either kind, chosen by the model and structurally validated by `parseAIResponse.ts`.
+Answer kind (`multiple-choice` or `free-text`) is **chosen by the model** per question and structurally validated by `parseAIResponse.ts` — multiple choice must carry 2–4 uniquely-id'd options with a `correctOptionId` matching one of them; free-text must carry a non-empty `rubricKeywords` array. Anything else is rejected as "no usable payload."
+
+Historically each type also had a local template with a hardcoded answer kind and difficulty (only `cause` was free-text). Those are removed; the type list is what survived, because the categories it feeds are what scoring is built on.
 
 All 8 map to one of the 7 user-facing `ChallengeCategory` values via `QUESTION_TYPE_TO_CATEGORY` (`prediction` and `cause` both fold into `reasoning`). There is an 8th internal score category, `retention`, that has **no dedicated question type** — see [§20](#20-aura-score) for why it is currently inert.
 
@@ -669,7 +687,7 @@ All 8 map to one of the 7 user-facing `ChallengeCategory` values via `QUESTION_T
 **Verified: `GeneratedQuestion` has no `status`/state field at all.** The implementation encodes lifecycle by *where the object currently lives* rather than by an explicit state enum. The practical lifecycle:
 
 ```text
-GENERATED    QuestionEngine returns a GeneratedQuestion (AI or template)
+GENERATED    QuestionEngine returns an AI-generated GeneratedQuestion
       ↓
 HELD         CodoraController.pendingQuestion = question   (in-memory only, private field)
       ↓
@@ -692,7 +710,7 @@ COMPLETE
 
 There are **no explicit `SKIPPED`/`EXPIRED`/`FAILED` states or records**. A challenge the user never answers (closed, or VS Code restarted while it was open) leaves no trace in storage — not even a placeholder. This is a genuine gap relative to a design that tracks skip/expiry explicitly; see [§49](#49-common-failure-scenarios).
 
-**Follow-up questions** are the one branch off this straight line: if the just-answered question was free-text, not itself already a follow-up, and judged "shallow" (`isShallowFreeTextAnswer` — answer under 15 characters, or it never uses a single rubric keyword), `CodoraController.tryGenerateFollowUp()` re-reads the same file from disk, re-extracts the same named function, and generates a deterministic `prediction` question tagged with `followUpToChallengeId`. This becomes the new `pendingQuestion` and is pushed to the still-open challenge webview 1200ms later as a `followUp` message. A follow-up's own answer goes through the identical `submitAnswer` path and is scored under `reasoning` (prediction's score category); its `followUpToChallengeId` prevents a second level of chaining.
+**Follow-up questions** are the one branch off this straight line: if the just-answered question was free-text, not itself already a follow-up, and judged "shallow" (`isShallowFreeTextAnswer` — answer under 15 characters, or it never uses a single rubric keyword), `CodoraController.tryGenerateFollowUp()` re-reads the same file from disk, re-extracts the same named function if `provenance.subjectFunction` is set, and asks the **same AI providers** (in the same priority order, reusing `activeAIProviders` from this challenge) for a `prediction` question tagged with `followUpToChallengeId`. If no provider can produce one, the follow-up is simply skipped — as with initial generation, there is no template fallback. This becomes the new `pendingQuestion` and is pushed to the still-open challenge webview 1200ms later as a `followUp` message. A follow-up's own answer goes through the identical `submitAnswer` path and is scored under `reasoning` (prediction's score category); its `followUpToChallengeId` prevents a second level of chaining.
 
 ---
 
@@ -721,8 +739,26 @@ ChallengeProvider.open()                                nothing happens — no r
       ↓                                                  no queued challenge; the developer
 controller.generateChallenge()  (see §13)                must use the sidebar/command to
       ↓                                                  start one manually later
-panel opens (or reveals) with the question
+   ┌──────────────┴───────────────┐
+   ▼                                 ▼
+a question                     undefined → describeUnavailable():
+      ↓                          getAIStatus() picks the case, and the panel opens
+panel opens (or reveals)         ANYWAY showing the reason where the question would be
+with the question                 • 'disabled'        → "AI-assisted challenges are
+                                                        turned off" + Open Settings
+                                  • 'none-configured' → "No AI provider configured"
+                                                        + Configure AI Provider
+                                  • otherwise         → "No provider could generate a
+                                                        challenge right now", listing what
+                                                        each provider actually returned
+                                                        (from getLastAIFailures()) + Show Logs
+                                  Every case also offers Try Again / Close.
+                                  Nothing canned is ever substituted for a question.
 ```
+
+**Why the panel opens on failure rather than just showing a toast:** a notification is easy to miss and disappears, and the three causes need different fixes. Rendering the reason in the same space a question would occupy — with the fixing action attached — makes the state unambiguous. `ChallengeUnavailable` (`messages.ts`) carries `{title, detail, action}`; the webview's `UnavailableView` renders it, and `action` round-trips back as `{type:'action', payload:'configure-ai'|'open-settings'|'show-logs'}`. Choosing **Configure AI Provider** re-runs generation immediately afterward, so a successful setup turns straight into a question without the user triggering another challenge by hand.
+
+Provider errors are summarized for display by `summarizeReason()`: a provider error is often a wall of JSON (a Gemini quota error is ~1.5KB), so it extracts `error.message` when the payload is JSON and caps the result at 220 characters — the untruncated text always remains in the output channel.
 
 `codora.challengeInterval` settings map to a concrete threshold via `resolveIntervalMs()` (pure, unit-tested): `10min`→600000, `30min`→1800000, `1hour`→3600000, `custom`→`customIntervalMinutes` minutes (min 1), `adaptive`→`ADAPTIVE_DEFAULT_MS` (25 minutes, a fixed constant — not tuned by performance data despite the name), `off`→`null` (never fires). There is no separate challenge *queue* — at most one challenge is "in flight" (`pendingQuestion`) at a time, and "Later" simply drops the opportunity rather than deferring it.
 
@@ -803,7 +839,7 @@ There is no separate "answer storage" — an answer only ever exists (a) transie
 ### AI evaluation (`HybridEvaluator.ts`) — implemented, not merely planned
 
 - Multiple-choice answers are **never** sent to an AI evaluator — exact match is objectively correct, so `HybridEvaluator` routes those straight to `DeterministicEvaluator`.
-- Free-text answers: only attempted if the question carries a `provenance.codeSnippet` (set by `AIQuestionGenerator` when the question itself was AI-generated, or by `HybridEvaluator`'s check for its presence more generally — deterministic-template free-text questions from `cause.ts` do **not** set `codeSnippet` in provenance, so `cause` questions are always scored deterministically even when an AI provider is configured; only AI-generated free-text questions get AI-evaluated).
+- Free-text answers: only attempted if the question carries a `provenance.codeSnippet`, which `AIQuestionGenerator` always sets to the exact snippet the model saw when writing the question. Reusing that stored snippet (rather than re-reading the file) means evaluation judges the answer against the code as it was *when asked*, even if the developer has edited it since. History records predating AI-only generation have no `codeSnippet` and are therefore always scored deterministically.
 - Each configured provider (same priority-ordered list resolved for generation, `activeAIProviders`) is tried in turn via `evaluateFreeText()`; the first one to return a structurally valid payload (`parseAIResponse.validateEvaluationPayload`) wins.
 - Any failure (network error, timeout — 20s via `AbortController`/`CancellationTokenSource` on the `vscode.lm` path — or an unparseable/out-of-range response) logs a warning and moves to the next provider; if all providers fail or none are configured, it falls back to `DeterministicEvaluator` — evaluation **never** throws up to the UI.
 - Both AI paths are constrained by `prompts.ts`'s shared "injection defense" clause (see [§29](#29-security-architecture)) and by strict JSON-shape validation (`parseAIResponse.ts`) before the payload is trusted at all.
@@ -1111,7 +1147,7 @@ interface BadgeState { id: string; earnedAt: number; }
 
 ## 26. Data Flow Examples
 
-### End-to-end example (git-based, deterministic template)
+### End-to-end example (git-based, AI-generated)
 
 Developer opens `my-app`, edits `src/auth/AuthService.ts` adding a null check, saves.
 
@@ -1128,13 +1164,17 @@ Developer opens `my-app`, edits `src/auth/AuthService.ts` adding a null check, s
    notifications.challenge is true → showInformationMessage(...)
 7. Developer clicks "Take Challenge" → challengeProvider.open()
 8. controller.generateChallenge():
-     - aiResolver.resolveCandidatesOrPrompt() → say, no AI configured → []
+     - aiResolver.resolveCandidatesOrPrompt() → say, ['gemini'] (a configured key,
+       no vscode.lm model available)
      - questionEngine.generateChallenge(): buildCandidateFiles() → git diff has
        src/auth/AuthService.ts changed → extractFunctions() finds loginUser(),
        parseChangedLines() confirms the diff touched loginUser's body
      - weightedCategoryOrder() puts 'debugging' first (lower rolling score, say)
-     - no AI providers to try → tryDeterministic(): generateDebugging() finds an
-       unguarded `user.email` access → returns a GeneratedQuestion
+     - tryAI(gemini, …): pickDifficulty('debugging', scores) → 'medium';
+       AIQuestionGenerator sends loginUser()'s body (capped at 3000 chars) with
+       the debugging/medium target; the model returns JSON that passes
+       validateGenerationPayload → a GeneratedQuestion with generatedBy:'ai'
+       and provenance.codeSnippet set to exactly what the model saw
 9. pendingQuestion set; ChallengeProvider posts {type:'question', payload} once
    the webview's 'ready' arrives
 10. Developer selects option 'a', clicks Submit → {type:'submitAnswer', ...}
@@ -1159,10 +1199,10 @@ WorkspaceAnalyzer.findRecentlyModifiedFiles() → say, zero files pass the size/
       ↓
 buildCandidateFiles() returns []
       ↓
-QuestionEngine.generateChallenge() returns undefined immediately (no AI/template attempted)
+QuestionEngine.generateChallenge() returns undefined immediately (no AI call attempted)
       ↓
-ChallengeProvider.open(): question is undefined →
-  showInformationMessage('Codora: not enough project context yet for a good challenge.')
+ChallengeProvider.open(): question is undefined → explainNoChallenge() inspects
+  controller.getAIStatus() and shows the matching actionable warning
   — no panel opens, nothing is stored, no score/streak/badge activity occurs
 ```
 
@@ -1177,7 +1217,7 @@ SessionManager (activity recorded; feeds the 15s tick loop)
       ↓ (interval threshold reached, not paused, interruption checks pass)
 extension.ts onChallengeReady() → notification → ChallengeProvider.open()
       ↓
-CodoraController.generateChallenge() → QuestionEngine → (AI or template)
+CodoraController.generateChallenge() → QuestionEngine → AI provider(s)
       ↓
 ChallengeProvider posts {type:'question'} to the webview
       ↓
@@ -1250,7 +1290,7 @@ ChallengeProvider posts 'result'  DashboardProvider re-posts   SidebarProvider r
 
 - **No shell injection surface:** `GitAnalyzer.run()` uses `child_process.execFile('git', argsArray, ...)` — never string-interpolated shell commands — so nothing in a filename, branch name, or commit message can execute as a shell command.
 - **Prompt injection defense is real, not aspirational.** `prompts.ts` prepends a fixed `INJECTION_DEFENSE` clause to both the generation and evaluation system prompts, explicitly instructing the model that everything under `CODE CONTEXT`/`DEVELOPER ANSWER` is data, never instructions — even if it looks like "ignore previous instructions" or "reveal your system prompt." This is enforced at the prompt-construction layer for every AI provider (`VsCodeLmProvider`, `AnthropicProvider`, `OpenAIProvider`, `GeminiProvider` all funnel through the same `buildGenerationPrompt`/`buildEvaluationPrompt`).
-- **Strict response validation.** `parseAIResponse.ts` never trusts a model's JSON at face value: `validateGenerationPayload`/`validateEvaluationPayload` check every field's type/range/shape before it becomes a `GeneratedQuestion` or `EvaluationResult`. A response that doesn't validate is treated as "no result," falling through to the next provider or the deterministic path — it can never smuggle extra fields or malformed data into scoring.
+- **Strict response validation.** `parseAIResponse.ts` never trusts a model's JSON at face value: `validateGenerationPayload`/`validateEvaluationPayload` check every field's type/range/shape before it becomes a `GeneratedQuestion` or `EvaluationResult`. A response that doesn't validate is treated as "no result," falling through to the next attempt or provider — it can never smuggle extra fields or malformed data into scoring.
 - **Workspace content cannot change Codora's own behavior.** Nothing in `src/` evaluates, `eval()`s, or otherwise executes content read from the workspace (source files, git output, AI-instruction files) as code or as instructions to the extension itself.
 
 ---
@@ -1266,10 +1306,11 @@ Verified fallback behavior, by subsystem:
 | Git command fails/times out | Caught, logged at `warn`, treated as `{available:false}` |
 | Corrupted `globalState`/`workspaceState` JSON | `StorageManager.validateGlobal`/`validateProject` catch any error, log a `warn`, and return a fresh default object rather than crashing |
 | Stored AI model id no longer supported | `validModel()` falls back to the current default and logs a warning |
-| AI provider unavailable / not configured | `AIProviderResolver.resolveCandidates()` returns an empty list; `QuestionEngine` and `HybridEvaluator` both operate correctly with zero providers |
-| AI request fails (network/timeout/permission) | Caught at the provider call site, logged with the real error, `onFailure` reason surfaced once per provider per session via a warning toast; next provider (or deterministic fallback) is tried |
+| AI provider unavailable / not configured | `AIProviderResolver.resolveCandidates()` returns an empty list. `HybridEvaluator` still scores answers locally, but `QuestionEngine` can generate nothing — `CodoraController.generateChallenge()` logs the specific reason (setting off / dismissed prompt / nothing available) and warns once per session |
+| AI request fails (network/timeout/permission) | Caught at the provider call site, logged with the real error, `onFailure` reason surfaced once per provider per session via a warning toast; the next attempt/provider is tried |
+| AI error is non-retryable (bad key / quota / retired model) | `isRetryableProviderError()` returns false → that provider is abandoned immediately rather than spending its remaining attempts (§13.3) |
 | AI response is malformed/unparseable | `extractJsonObject`/`validate*Payload` return `undefined`; treated identically to "AI declined" |
-| No template can produce a confident question | `QuestionEngine.generateChallenge()` returns `undefined`; `ChallengeProvider.open()` shows an info message and opens no panel |
+| No provider can produce a question | `QuestionEngine.generateChallenge()` returns `undefined`; `ChallengeProvider.explainNoChallenge()` reports the specific cause (AI off / none configured / all failed) with a fixing action, and opens no panel. There is no template fallback by design (§13) |
 | Webview panel closed/disposed | `onDidDispose` clears the provider's panel reference; the extension host keeps running normally |
 | User is idle | `SessionManager` ticks continue, but contribute 0 to `activeMs`/`msSinceLastChallenge` once the gap exceeds 2 minutes |
 | User closes a challenge without answering | No error and no record — see §15/§49 |
@@ -1384,7 +1425,7 @@ Vitest (`vitest.config.ts`: `test/**/*.test.ts`). Tests mirror `src/core/**` str
 | `test/core/badges/BadgeEngine.test.ts` | Badge award conditions |
 | `test/core/context/CodeContextExtractor.test.ts` | Function/guard-clause/loop/validation extraction (largest suite, 21 cases) |
 | `test/core/questions/questionFingerprint.test.ts` | Fingerprint identity/equality |
-| `test/core/questions/templates.test.ts` | Deterministic template generation |
+| `test/core/ai/classifyProviderError.test.ts` | Retryable vs dead provider errors (401/429/404) |
 | `test/core/scoring/Evaluator.test.ts` | Deterministic multiple-choice/free-text evaluation |
 | `test/core/scoring/ScoreEngine.test.ts` | Rolling-score EMA math, Aura computation |
 | `test/core/scoring/StreakEngine.test.ts` | Streak increment/decay/timezone-day logic |
@@ -1393,7 +1434,7 @@ Vitest (`vitest.config.ts`: `test/**/*.test.ts`). Tests mirror `src/core/**` str
 
 `resolveIntervalMs.ts` and `questionFingerprint.ts` are explicitly written with no `vscode` import specifically so they can be unit-tested outside the extension host — a pattern worth following for any new pure logic (see [§44](#44-how-to-add-a-new-question-type)–[§48](#48-how-to-add-a-new-storage-field)).
 
-**Not currently tested by an automated suite:** `SessionManager` (needs a real/mocked `vscode.workspace` event surface), `QuestionEngine`'s AI-vs-deterministic orchestration, any `providers/*.ts` webview wiring, and the webview React apps themselves.
+**Not currently tested by an automated suite:** `SessionManager` (needs a real/mocked `vscode.workspace` event surface), `QuestionEngine`'s multi-provider orchestration (it imports `vscode` transitively, so it can't be loaded outside the extension host), any `providers/*.ts` webview wiring, and the webview React apps themselves.
 
 ---
 
@@ -1510,21 +1551,20 @@ Much of this already exists (see §13, §18) — this section documents only wha
 ## 44. How to Add a New Question Type
 
 ```text
-1. Add the new value to QuestionType (QuestionTypes.ts) and QUESTION_TYPE_TO_CATEGORY /
-   QUESTION_TYPE_TO_SCORE_CATEGORY (map it to an existing or new ChallengeCategory/ScoreCategory).
-2. Write a template function in src/core/questions/templates/<name>.ts matching the
-   existing contract: (ctx: TemplateContext) => GeneratedQuestion | undefined.
-   Return undefined whenever you can't find a defensible fact — never guess.
-3. Register it in QuestionGenerator.ts's TEMPLATES map and ALL_QUESTION_TYPES array.
-4. If it should also be AI-generatable, no extra code is needed — AIQuestionGenerator
-   is already generic over QuestionType/ChallengeCategory; just ensure the category is
-   enabled in codora.categories if it's a new category.
-5. Add a unit test in test/core/questions/templates.test.ts following the existing
-   pattern (build a TemplateContext fixture, assert either a question or `undefined`).
-6. If it needs a new code-extraction primitive, add it to CodeContextExtractor.ts
-   (keep it regex/brace-matching, not a full parser, per the existing "skip rather
-   than guess" contract) and add a corresponding test in CodeContextExtractor.test.ts.
-7. Update this document's §14 table.
+1. Add the new value to QuestionType (QuestionTypes.ts), to ALL_QUESTION_TYPES, and to
+   QUESTION_TYPE_TO_CATEGORY / QUESTION_TYPE_TO_SCORE_CATEGORY (map it to an existing
+   or new ChallengeCategory/ScoreCategory).
+2. That is all the wiring needed for generation: AIQuestionGenerator is generic over
+   QuestionType/ChallengeCategory and passes the type name straight into the prompt,
+   so QuestionEngine will start targeting it on its next pass.
+3. Describe the new type in prompts.ts only if the bare type name isn't self-explanatory
+   to a model — the generation prompt interpolates ctx.questionType directly.
+4. If it's a NEW category, add it to the codora.categories enum in package.json and to
+   ALL_CATEGORIES in SettingsPanel.tsx / onboarding App.tsx, or it can never be enabled.
+5. If it needs a new code-extraction primitive to pick better candidate snippets, add it
+   to CodeContextExtractor.ts (keep it regex/brace-matching, not a full parser) with a
+   test in CodeContextExtractor.test.ts.
+6. Update this document's §14 table.
 ```
 
 ---
@@ -1579,10 +1619,9 @@ Example: a `Dockerfile` or `README.md` reader.
    WorkspaceAnalyzer.ts / AIContextScanner.ts's shape: a pure function returning
    a small, bounded, byte-capped result; never throw; return undefined/empty on
    any absence or failure).
-2. Feed its output into QuestionEngine.buildCandidateFiles() (or, for a new
-   template-only signal, into the TemplateContext type in QuestionGenerator.ts)
-   — do NOT reach into it from a template file directly; keep aggregation
-   centralized in QuestionEngine the way git/workspace context already is.
+2. Feed its output into QuestionEngine.buildCandidateFiles() (extend CandidateFile
+   if it needs to travel with a candidate) — keep aggregation centralized in
+   QuestionEngine the way git/workspace context already is.
 3. If the new source should also inform AI-generated questions, add it to the
    `user` prompt built in prompts.ts's buildGenerationPrompt, clearly labeled
    as DATA (matching the existing INJECTION_DEFENSE framing) — never merge it
@@ -1704,8 +1743,8 @@ Why: the dashboard/challenge/onboarding surfaces need rich, tabbed, styled layou
 **Git-diff-first context selection, with a recently-modified-files fallback.**
 Why: "what did you just change" is a stronger comprehension-check signal than "what's in the project generally"; the fallback keeps Codora useful in non-git projects.
 
-**Deterministic templates as a real, fully-working baseline; AI as a strictly optional enhancement layered on top, tried FIRST but never required.**
-Why (per the project's own recent commit history — "Make deterministic templates a true last resort, not a same-combo fallback"): every AI provider gets a genuine, multi-attempt chance across different categories/files before deterministic templates are touched at all, so a configured AI is actually used, not just nominally available — while the whole system still works with zero AI configured.
+**AI-only question generation; no local-template fallback.**
+Why: the templates existed so Codora worked with zero AI configured, but in practice they became the thing users actually got whenever AI hiccuped — and a canned question that fits any file is exactly what the "skip rather than guess" principle (§2) exists to prevent. It also made failures invisible: a silent downgrade to a template looked identical to AI working. The intermediate step in the commit history ("Make deterministic templates a true last resort, not a same-combo fallback") tightened the ordering first; removing them entirely finished the job. The cost is accepted deliberately: with no provider available, Codora asks nothing and says why. Evaluation still degrades locally, since scoring an already-asked question has no such honesty problem.
 
 **No keystroke logging — only edit/save/git-state events.**
 Why: matches the explicit "not a keystroke logger" positioning (§1); high-level signals are enough to measure active coding time without capturing content.
@@ -1733,8 +1772,8 @@ Stated plainly, each verified against the code rather than assumed:
 - codora.startDeepChallenge and codora.showProgress are wired to the exact
   same handlers as codora.startChallenge / codora.openDashboard respectively —
   there is no distinct "deep challenge" mode (§34).
-- Adaptive difficulty (pickDifficulty) only affects AI-generated questions;
-  the 8 deterministic templates each hardcode a fixed difficulty (§13.2).
+- retention is a scored category with no question type that ever targets it,
+  so it stays permanently at 0 samples and is excluded from Aura (§20).
 - No automatic secret-pattern filtering (e.g. .env contents, key-shaped
   strings) before a file/snippet is read for context or sent to an AI
   provider — only the existing directory exclusions and a prompt-level
@@ -1808,10 +1847,10 @@ AIProviderResolver.resolveCandidatesOrPrompt() → ordered AIProvider[] (maybe e
 QuestionEngine.generateChallenge():
    ├── buildCandidateFiles(): GitAnalyzer → (or) WorkspaceAnalyzer → CodeContextExtractor
    ├── weightedCategoryOrder() (favors lower rolling-score categories)
-   ├── try each AI provider (bounded attempts, skipping recent fingerprints) → AIQuestionGenerator
-   └── else try deterministic templates (first pass avoids repeats, second pass allows them)
+   ├── pass 1: each AI provider, bounded attempts, skipping recent fingerprints
+   └── pass 2: same providers, allowing a repeat (only if pass 1 found nothing)
    ↓
-GeneratedQuestion (or undefined → challenge silently skipped)
+GeneratedQuestion (or undefined → no challenge; explainNoChallenge() says why)
    ↓
 CodoraController.pendingQuestion set; ChallengeProvider shows it in a webview panel
    ↓
@@ -1853,9 +1892,8 @@ SESSION        src/core/session/SessionManager.ts
 CONTEXT        src/core/context/{GitAnalyzer,WorkspaceAnalyzer,CodeContextExtractor,
                AIContextScanner}.ts  (AIContextScanner not yet wired in — §11)
 
-QUESTIONS      src/core/questions/QuestionEngine.ts (orchestration)
-               src/core/questions/QuestionGenerator.ts (+ templates/*.ts, deterministic)
-               src/core/questions/AIQuestionGenerator.ts (AI path)
+QUESTIONS      src/core/questions/QuestionEngine.ts (orchestration, per-provider passes)
+               src/core/questions/AIQuestionGenerator.ts (provider response → question)
 
 CHALLENGE UI   src/providers/ChallengeProvider.ts → webview/challenge/App.tsx
 

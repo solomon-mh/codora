@@ -90,9 +90,26 @@ export type DashboardToExtensionMessage =
 
 export type ExtensionToDashboardMessage = { type: 'state'; payload: DashboardState };
 
+/** What the challenge panel can ask the extension to do when it can't show a question. */
+export type ChallengeUnavailableAction = 'configure-ai' | 'open-settings' | 'show-logs';
+
+/**
+ * Shown in the challenge panel in place of a question. Question generation
+ * is AI-only, so "couldn't generate one" is a normal, explainable state
+ * that belongs where the question would have been — with the action that
+ * fixes it — rather than only as a toast the user can miss.
+ */
+export interface ChallengeUnavailable {
+  title: string;
+  detail: string;
+  action?: { label: string; kind: ChallengeUnavailableAction };
+}
+
 export type ChallengeToExtensionMessage =
   | { type: 'ready' }
   | { type: 'submitAnswer'; payload: ChallengeAnswer }
+  | { type: 'retry' }
+  | { type: 'action'; payload: ChallengeUnavailableAction }
   | { type: 'close' };
 
 export type ExtensionToChallengeMessage =
@@ -105,7 +122,8 @@ export type ExtensionToChallengeMessage =
         correctOptionText?: string;
       };
     }
-  | { type: 'followUp'; payload: GeneratedQuestion };
+  | { type: 'followUp'; payload: GeneratedQuestion }
+  | { type: 'unavailable'; payload: ChallengeUnavailable };
 
 export type OnboardingToExtensionMessage = {
   type: 'complete';

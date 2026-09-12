@@ -49,8 +49,8 @@ export class CodoraController implements vscode.Disposable {
   private pendingQuestion: GeneratedQuestion | null = null;
   /** AI providers (if any) resolved for the in-flight challenge, in priority order, reused for its evaluation. */
   private activeAIProviders: AIProvider[] = [];
-  /** Shown once per session: "no AI provider was even tried, and here's why" — the silent version of this was impossible to distinguish from "AI tried and failed". */
-  private hasWarnedNoProviders = false;
+  /** Per-provider failure reasons from the most recent generateChallenge(), surfaced in the challenge panel. */
+  private lastAIFailures: { provider: string; reason?: string }[] = [];
 
   constructor(
     context: vscode.ExtensionContext,
@@ -124,6 +124,9 @@ export class CodoraController implements vscode.Disposable {
       aiPromptDismissed: global.aiPromptDismissed,
     });
     if (this.activeAIProviders.length === 0) {
+      // The challenge panel reports this to the user (see
+      // ChallengeProvider.describeUnavailable) — logged here so the precise
+      // cause is still recoverable from the output channel.
       let reason: string;
       if (!global.settings.ai.enabled) {
         reason = 'AI is turned off (Dashboard → Settings → "Allow Codora to use an AI model" is unchecked)';
@@ -133,27 +136,30 @@ export class CodoraController implements vscode.Disposable {
         reason = 'nothing is configured and nothing is available via VS Code';
       }
       getLogger().warn(`No AI provider will be tried this challenge: ${reason}`);
-      if (!this.hasWarnedNoProviders) {
-        this.hasWarnedNoProviders = true;
-        void vscode.window.showWarningMessage(
-          `Codora: every challenge is using local templates because ${reason}. Run "Codora: Configure AI Provider" to fix this.`,
-        );
-      }
     }
 
+    // Reset per challenge: these are the reasons *this* attempt failed, and
+    // they're what the panel shows instead of a generic guess.
+    this.lastAIFailures = [];
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
       categoryScores: global.categoryScores,
       staleSubjectFiles,
       recentFingerprints,
       aiProviders: this.activeAIProviders,
+      onProviderFailure: (provider, reason) => this.lastAIFailures.push({ provider, reason }),
     });
 
     this.pendingQuestion = question ?? null;
     if (!question) {
-      getLogger().info('Challenge skipped: no confident question available');
+      getLogger().info('Challenge skipped: no AI provider produced a question');
     }
     return question;
+  }
+
+  /** Why each provider failed during the most recent generateChallenge(), for the UI to report verbatim. */
+  getLastAIFailures(): ReadonlyArray<{ provider: string; reason?: string }> {
+    return this.lastAIFailures;
   }
 
   getPendingQuestion(): GeneratedQuestion | null {

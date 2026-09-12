@@ -16,15 +16,6 @@ import { questionFingerprint } from './questionFingerprint';
 const MAX_FILE_READ_BYTES = 200_000;
 /** Real AI calls attempted per provider, per challenge, before moving to the next provider — bounded so a failing provider doesn't turn every challenge into dozens of sequential requests. A non-retryable error (bad key, exhausted quota, retired model) stops that provider immediately, well before this cap. */
 const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
-/**
- * Shown once per *provider* per session — keyed by provider id, not a
- * single global flag — so switching from a failing provider to a newly
- * configured one always surfaces fresh diagnostic info instead of going
- * silent because something else already tripped the warning. Full detail
- * always goes to the Codora output channel regardless of this cap.
- */
-const warnedAIFailureProviders = new Set<string>();
-
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
   categoryScores: RollingScoreMap;
@@ -41,6 +32,8 @@ export interface GenerateChallengeOptions {
   aiProviders?: AIProvider[];
   /** Fingerprints of recently-asked (type, file, function) combos — avoided on a first pass so the same question doesn't repeat while other candidates exist. */
   recentFingerprints?: Set<string>;
+  /** Called once per provider that couldn't produce a question, so the caller can report the real reason in the UI instead of guessing at it. */
+  onProviderFailure?: (providerLabel: string, reason: string | undefined) => void;
 }
 
 interface CandidateFile {
@@ -114,7 +107,7 @@ export class QuestionEngine {
             continue;
           }
           if (attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) {
-            this.reportAIFailure(provider, lastFailureReason);
+            this.reportAIFailure(provider, lastFailureReason, options);
             return undefined;
           }
           attempts++;
@@ -140,30 +133,25 @@ export class QuestionEngine {
         }
       }
     }
-    if (attempts > 0) this.reportAIFailure(provider, lastFailureReason);
+    if (attempts > 0) this.reportAIFailure(provider, lastFailureReason, options);
     return undefined;
   }
 
   /**
-   * Records why a provider couldn't produce a question. Shown once per
-   * *provider id* per session (full detail always goes to the Codora
-   * output channel) so a misconfigured key doesn't nag on every single
-   * challenge, while a newly tried provider still always gets its own
-   * fresh warning. The caller reports the overall "no challenge at all"
-   * outcome separately — this is per-provider.
+   * Records why a provider couldn't produce a question, and hands the
+   * reason to the caller so it can be shown in the challenge panel itself
+   * rather than only as a toast the user can miss.
    */
-  private reportAIFailure(provider: AIProvider, reason: string | undefined): void {
-    const providerLabel = provider.label;
+  private reportAIFailure(
+    provider: AIProvider,
+    reason: string | undefined,
+    options: GenerateChallengeOptions,
+  ): void {
     getLogger().warn('AI provider could not produce a usable question', {
-      provider: providerLabel,
+      provider: provider.label,
       reason,
     });
-    if (warnedAIFailureProviders.has(provider.id)) return;
-    warnedAIFailureProviders.add(provider.id);
-    const detail = reason ? ` (${reason})` : '';
-    void vscode.window.showWarningMessage(
-      `Codora: ${providerLabel} could not generate a question${detail}. See the "Codora" output channel for details.`,
-    );
+    options.onProviderFailure?.(provider.label, reason);
   }
 
   private async buildCandidateFiles(root: string): Promise<CandidateFile[]> {

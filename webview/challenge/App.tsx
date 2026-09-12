@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type {
   ChallengeToExtensionMessage,
+  ChallengeUnavailable,
   ExtensionToChallengeMessage,
 } from '../shared/messages';
 import type { GeneratedQuestion } from '../../src/core/questions/QuestionTypes';
@@ -17,6 +18,7 @@ interface ResultState {
 
 export function App(): JSX.Element {
   const [question, setQuestion] = useState<GeneratedQuestion | null>(null);
+  const [unavailable, setUnavailable] = useState<ChallengeUnavailable | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [freeText, setFreeText] = useState('');
@@ -27,10 +29,15 @@ export function App(): JSX.Element {
       const msg = event.data;
       if (msg.type === 'question' || msg.type === 'followUp') {
         setQuestion(msg.payload);
+        setUnavailable(null);
         setResult(null);
         setSelectedOption(null);
         setFreeText('');
         startedAt.current = Date.now();
+      } else if (msg.type === 'unavailable') {
+        setUnavailable(msg.payload);
+        setQuestion(null);
+        setResult(null);
       } else if (msg.type === 'result') {
         setResult(msg.payload);
       }
@@ -39,6 +46,10 @@ export function App(): JSX.Element {
     vscode.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  if (unavailable) {
+    return <UnavailableView state={unavailable} />;
+  }
 
   if (!question) {
     return <div style={{ padding: 24 }} className="codora-muted">Preparing your challenge…</div>;
@@ -164,6 +175,52 @@ export function App(): JSX.Element {
       )}
 
       {result && <ResultView result={result} onClose={() => vscode.postMessage({ type: 'close' })} />}
+    </div>
+  );
+}
+
+/**
+ * Shown in place of a question when no AI provider could generate one.
+ * Occupies the same space a question would, so the reason is impossible to
+ * miss, and carries the action that actually resolves it.
+ */
+function UnavailableView({ state }: { state: ChallengeUnavailable }): JSX.Element {
+  return (
+    <div style={{ padding: 24, maxWidth: 560, margin: '0 auto' }}>
+      <div
+        className="codora-muted"
+        style={{ fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}
+      >
+        🧠 Codora Challenge
+      </div>
+
+      <div className="codora-card" style={{ borderColor: 'var(--codora-border)' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>⚠ {state.title}</div>
+        <div
+          className="codora-muted"
+          // pre-wrap: the detail may list one provider failure per line.
+          style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 16, whiteSpace: 'pre-wrap' }}
+        >
+          {state.detail}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {state.action && (
+            <button
+              className="codora-btn"
+              onClick={() => vscode.postMessage({ type: 'action', payload: state.action!.kind })}
+            >
+              {state.action.label}
+            </button>
+          )}
+          <button className="codora-btn-secondary" onClick={() => vscode.postMessage({ type: 'retry' })}>
+            Try Again
+          </button>
+          <button className="codora-btn-secondary" onClick={() => vscode.postMessage({ type: 'close' })}>
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
