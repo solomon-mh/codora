@@ -1,0 +1,118 @@
+{
+  "name": "codora",
+  "displayName": "Codora",
+  "description": "Increase your aura by knowing what you code.",
+  "version": "0.1.0",
+  "publisher": "codora",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codora",
+          "title": "Codora",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "codora": [
+        {
+          "id": "codora.sidebar",
+          "name": "Codora",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "codora.openDashboard", "title": "Codora: Open Dashboard" },
+      { "command": "codora.startChallenge", "title": "Codora: Start Challenge" },
+      { "command": "codora.pauseChallenges", "title": "Codora: Pause Challenges" },
+      { "command": "codora.resumeChallenges", "title": "Codora: Resume Challenges" },
+      { "command": "codora.showAura", "title": "Codora: Show Aura" },
+      { "command": "codora.showProgress", "title": "Codora: Show Progress" },
+      { "command": "codora.startDeepChallenge", "title": "Codora: Start Deep Challenge" },
+      { "command": "codora.resetProjectData", "title": "Codora: Reset Project Data" }
+    ],
+    "configuration": {
+      "title": "Codora",
+      "properties": {
+        "codora.challengeInterval": {
+          "type": "string",
+          "enum": ["10min", "30min", "1hour", "adaptive", "off"],
+          "default": "30min",
+          "description": "How often (in active coding time) Codora offers a comprehension challenge."
+        },
+        "codora.difficulty": {
+          "type": "string",
+          "enum": ["adaptive", "easy", "medium", "hard"],
+          "default": "adaptive",
+          "description": "Challenge difficulty."
+        },
+        "codora.categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["recall", "reasoning", "debugging", "architecture", "testing", "security", "performance"]
+          },
+          "default": ["recall", "reasoning", "debugging", "architecture", "testing", "security", "performance"],
+          "description": "Enabled challenge categories."
+        },
+        "codora.notifications.challenge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when a challenge is ready."
+        },
+        "codora.notifications.dailyProgress": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a daily progress summary."
+        },
+        "codora.notifications.weeklySummary": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a weekly summary."
+        },
+        "codora.avoidInterrupting.debugging": { "type": "boolean", "default": true },
+        "codora.avoidInterrupting.testsRunning": { "type": "boolean", "default": true },
+        "codora.avoidInterrupting.gitOperations": { "type": "boolean", "default": true },
+        "codora.doNotDisturb": {
+          "type": "boolean",
+          "default": false,
+          "description": "Manually silence Codora notifications (presentation mode / do-not-disturb)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "test": "vitest run",
+    "lint": "eslint src webview --ext .ts,.tsx",
+    "vscode:prepublish": "npm run package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.3"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
