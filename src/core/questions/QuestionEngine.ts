@@ -15,13 +15,15 @@ import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
 
 const MAX_FILE_READ_BYTES = 200_000;
+/** Real AI calls attempted per challenge before giving up and falling to deterministic templates — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
+const MAX_AI_ATTEMPTS = 4;
 
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
   categoryScores: RollingScoreMap;
   /** Files asked about more than N days ago — eligible for a retention check. */
   staleSubjectFiles: Set<string>;
-  /** When set, each (type, candidate) pair is tried via AI first, falling back to the deterministic template on any failure. */
+  /** When set, AI is tried across several categories/files before deterministic templates are touched at all — see MAX_AI_ATTEMPTS. */
   aiProvider?: AIProvider;
   /** Fingerprints of recently-asked (type, file, function) combos — avoided on a first pass so the same question doesn't repeat while other candidates exist. */
   recentFingerprints?: Set<string>;
@@ -47,15 +49,25 @@ export class QuestionEngine {
 
     const categoryOrder = weightedCategoryOrder(options.enabledCategories, options.categoryScores);
 
-    // First pass avoids repeating anything asked recently, so variety comes
-    // from trying other categories/types/files first. If that leaves
-    // nothing (e.g. only one file/function is actually being worked on),
-    // a second pass allows repeats rather than silently skipping the
-    // challenge — a repeat is better than nothing firing at all.
-    const firstPass = await this.tryAllCombos(candidates, categoryOrder, options, options.recentFingerprints);
+    // AI gets a real, multi-attempt chance across different
+    // categories/files before deterministic templates are touched at all
+    // — deterministic is the last resort, not a same-combo fallback for
+    // the first thing AI happened to fail on.
+    if (options.aiProvider) {
+      const aiQuestion = await this.tryAI(candidates, categoryOrder, options, options.recentFingerprints);
+      if (aiQuestion) return aiQuestion;
+      getLogger().info('AI did not produce a usable question after several attempts — falling back to local templates');
+    }
+
+    // Deterministic first pass avoids repeating anything asked recently, so
+    // variety comes from trying other categories/types/files first. If
+    // that leaves nothing (e.g. only one file/function is actually being
+    // worked on), a second pass allows repeats rather than silently
+    // skipping the challenge — a repeat is better than nothing firing.
+    const firstPass = await this.tryDeterministic(candidates, categoryOrder, options, options.recentFingerprints);
     if (firstPass) return firstPass;
     if (options.recentFingerprints && options.recentFingerprints.size > 0) {
-      const secondPass = await this.tryAllCombos(candidates, categoryOrder, options, undefined);
+      const secondPass = await this.tryDeterministic(candidates, categoryOrder, options, undefined);
       if (secondPass) return secondPass;
     }
 
@@ -63,7 +75,38 @@ export class QuestionEngine {
     return undefined;
   }
 
-  private async tryAllCombos(
+  private async tryAI(
+    candidates: CandidateFile[],
+    categoryOrder: ChallengeCategory[],
+    options: GenerateChallengeOptions,
+    skipFingerprints: Set<string> | undefined,
+  ): Promise<GeneratedQuestion | undefined> {
+    const provider = options.aiProvider;
+    if (!provider) return undefined;
+    let attempts = 0;
+
+    for (const category of categoryOrder) {
+      const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
+      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+
+      for (const type of types) {
+        for (const candidate of candidates) {
+          if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
+            continue;
+          }
+          if (attempts >= MAX_AI_ATTEMPTS) return undefined;
+          attempts++;
+
+          const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
+          const aiQuestion = await tryGenerateAIQuestion(provider, category, type, difficulty, candidate, isRetentionCheck);
+          if (aiQuestion) return aiQuestion;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private async tryDeterministic(
     candidates: CandidateFile[],
     categoryOrder: ChallengeCategory[],
     options: GenerateChallengeOptions,
@@ -71,30 +114,14 @@ export class QuestionEngine {
   ): Promise<GeneratedQuestion | undefined> {
     for (const category of categoryOrder) {
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
-      // ChallengeCategory's values are a subset of ScoreCategory's (everything but "retention").
-      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
 
       for (const type of types) {
         for (const candidate of candidates) {
-          if (skipFingerprints) {
-            const fingerprint = questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name);
-            if (skipFingerprints.has(fingerprint)) continue;
+          if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
+            continue;
           }
 
           const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
-
-          if (options.aiProvider) {
-            const aiQuestion = await tryGenerateAIQuestion(
-              options.aiProvider,
-              category,
-              type,
-              difficulty,
-              candidate,
-              isRetentionCheck,
-            );
-            if (aiQuestion) return aiQuestion;
-          }
-
           const ctx: TemplateContext = {
             file: candidate.file,
             fn: candidate.fn,
