@@ -149,7 +149,11 @@ export function extractReturnStatements(body: string): string[] {
   const re = new RegExp(RETURN_PATTERN);
   while ((match = re.exec(body))) {
     const expr = match[1].trim();
-    if (expr && results.size < 6) results.add(expr);
+    // A multi-line return (e.g. JSX's `return (` followed by a newline)
+    // gets truncated at the newline, leaving just a stray opening bracket
+    // — not a usable answer, so skip it rather than surface junk.
+    if (!expr || /^[[({]+$/.test(expr)) continue;
+    if (results.size < 6) results.add(expr);
   }
   return Array.from(results);
 }

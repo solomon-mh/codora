@@ -52,7 +52,7 @@ export function App(): JSX.Element {
         <div style={{ fontSize: 12 }}>🔥 {state.streakCurrent} day streak</div>
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 6 }}>
           <span className="codora-muted" style={{ fontSize: 11 }}>Aura</span>
-          <span style={{ fontSize: 22, fontWeight: 600 }}>{state.hasEnoughData ? state.aura : '—'}</span>
+          <span style={{ fontSize: 22, fontWeight: 600 }}>{state.hasEnoughData ? Math.round(state.aura ?? 0) : '—'}</span>
         </div>
         {state.hasEnoughData && <div className="codora-muted" style={{ fontSize: 11 }}>{state.auraLabel}</div>}
       </div>
