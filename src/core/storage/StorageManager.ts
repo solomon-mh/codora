@@ -21,6 +21,7 @@ function defaultGlobalProfile(): GlobalProfile {
     badges: [],
     auraHistory: [],
     challengesPausedUntil: null,
+    aiPromptDismissed: false,
   };
 }
 
@@ -94,7 +95,23 @@ export class StorageManager {
       if (!migrated.settings || !migrated.categoryScores || !migrated.streak) {
         throw new Error('missing required fields');
       }
-      return migrated;
+      // Deep-merge settings against current defaults regardless of
+      // schemaVersion: fields get added to CodoraSettings during active
+      // development more often than SCHEMA_VERSION gets bumped, and a
+      // profile stored before such an addition would otherwise be missing
+      // a nested object (e.g. `settings.ai`) that later code assumes exists.
+      const defaults = defaultSettings();
+      return {
+        ...migrated,
+        aiPromptDismissed: migrated.aiPromptDismissed ?? false,
+        settings: {
+          ...defaults,
+          ...migrated.settings,
+          notifications: { ...defaults.notifications, ...migrated.settings.notifications },
+          avoidInterrupting: { ...defaults.avoidInterrupting, ...migrated.settings.avoidInterrupting },
+          ai: { ...defaults.ai, ...migrated.settings.ai },
+        },
+      };
     } catch (err) {
       getLogger().warn('Corrupted global profile, resetting to defaults', {
         error: String(err),

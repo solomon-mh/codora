@@ -6,7 +6,7 @@
   "publisher": "codora",
   "private": true,
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.93.0"
   },
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
@@ -38,7 +38,8 @@
       { "command": "codora.showAura", "title": "Codora: Show Aura" },
       { "command": "codora.showProgress", "title": "Codora: Show Progress" },
       { "command": "codora.startDeepChallenge", "title": "Codora: Start Deep Challenge" },
-      { "command": "codora.resetProjectData", "title": "Codora: Reset Project Data" }
+      { "command": "codora.resetProjectData", "title": "Codora: Reset Project Data" },
+      { "command": "codora.configureAI", "title": "Codora: Configure AI Provider" }
     ],
     "configuration": {
       "title": "Codora",
@@ -86,6 +87,17 @@
           "type": "boolean",
           "default": false,
           "description": "Manually silence Codora notifications (presentation mode / do-not-disturb)."
+        },
+        "codora.ai.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Codora to use an AI model (VS Code's built-in Language Model API, e.g. GitHub Copilot, or a manually configured API key) to generate richer questions and evaluate free-text answers. When off, or when no AI is configured, Codora falls back to fully local deterministic templates."
+        },
+        "codora.ai.anthropicModel": {
+          "type": "string",
+          "enum": ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"],
+          "default": "claude-haiku-4-5",
+          "description": "Model used for the manual Anthropic API key fallback (only used when no VS Code Language Model is available)."
         }
       }
     }
@@ -102,7 +114,7 @@
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",
     "esbuild": "^0.23.0",
@@ -112,6 +124,7 @@
     "vitest": "^2.0.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

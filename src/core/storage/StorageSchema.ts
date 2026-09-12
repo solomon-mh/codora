@@ -6,6 +6,7 @@ export const SCHEMA_VERSION = 1;
 
 export type ChallengeInterval = '10min' | '30min' | '1hour' | 'adaptive' | 'off';
 export type DifficultySetting = 'adaptive' | 'easy' | 'medium' | 'hard';
+export type AnthropicModel = 'claude-haiku-4-5' | 'claude-sonnet-5' | 'claude-opus-5';
 
 export interface CodoraSettings {
   challengeInterval: ChallengeInterval;
@@ -22,6 +23,12 @@ export interface CodoraSettings {
     gitOperations: boolean;
   };
   doNotDisturb: boolean;
+  ai: {
+    /** When false, Codora never attempts an AI call and never prompts to configure one. */
+    enabled: boolean;
+    /** Model for the manual Anthropic API key fallback (only used when no VS Code Language Model is available). */
+    anthropicModel: AnthropicModel;
+  };
 }
 
 export interface StreakState {
@@ -47,6 +54,8 @@ export interface GlobalProfile {
   badges: BadgeState[];
   auraHistory: { date: string; value: number }[];
   challengesPausedUntil: number | null;
+  /** True once the user has dismissed the "configure an AI provider" prompt, so Codora stops asking. */
+  aiPromptDismissed: boolean;
 }
 
 /** Per-workspace project data (spec sections 26-27, 30). */
@@ -68,5 +77,6 @@ export function defaultSettings(): CodoraSettings {
     notifications: { challenge: true, dailyProgress: true, weeklySummary: true },
     avoidInterrupting: { debugging: true, testsRunning: true, gitOperations: true },
     doNotDisturb: false,
+    ai: { enabled: true, anthropicModel: 'claude-haiku-4-5' },
   };
 }

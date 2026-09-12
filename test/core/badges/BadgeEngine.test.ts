@@ -15,6 +15,7 @@ function baseProfile(overrides: Partial<GlobalProfile> = {}): GlobalProfile {
     badges: [],
     auraHistory: [],
     challengesPausedUntil: null,
+    aiPromptDismissed: false,
     ...overrides,
   };
 }
