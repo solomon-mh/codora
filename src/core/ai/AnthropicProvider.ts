@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
 import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
+import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
@@ -17,18 +18,20 @@ const MAX_TOKENS = 1024;
  * Language Model is available. The key lives in VS Code's SecretStorage —
  * never in settings.json, never logged.
  */
-export class AnthropicProvider implements AIProvider {
+export class AnthropicProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'anthropic' as const;
   readonly label = 'Anthropic API';
   private readonly client: Anthropic;
 
   constructor(apiKey: string, private readonly model: AnthropicModel) {
+    super();
     this.client = new Anthropic({ apiKey });
   }
 
   async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateGenerationPayload(extractJsonObject(text));
   }
@@ -36,6 +39,7 @@ export class AnthropicProvider implements AIProvider {
   async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
     const { system, user } = buildEvaluationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateEvaluationPayload(extractJsonObject(text));
   }

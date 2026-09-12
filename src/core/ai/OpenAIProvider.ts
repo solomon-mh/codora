@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
 import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
+import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
@@ -18,18 +19,20 @@ const MAX_COMPLETION_TOKENS = 1024;
  * available. The key lives in VS Code's SecretStorage — never in
  * settings.json, never logged.
  */
-export class OpenAIProvider implements AIProvider {
+export class OpenAIProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'openai' as const;
   readonly label = 'OpenAI API';
   private readonly client: OpenAI;
 
   constructor(apiKey: string, private readonly model: OpenAIModel) {
+    super();
     this.client = new OpenAI({ apiKey });
   }
 
   async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateGenerationPayload(extractJsonObject(text));
   }
@@ -37,6 +40,7 @@ export class OpenAIProvider implements AIProvider {
   async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
     const { system, user } = buildEvaluationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateEvaluationPayload(extractJsonObject(text));
   }

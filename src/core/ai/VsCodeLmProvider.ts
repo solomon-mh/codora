@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
 import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
 import { pickPreferredModel } from './pickPreferredModel';
+import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
@@ -25,11 +26,12 @@ const REQUEST_TIMEOUT_MS = 20_000;
  * since generateChallenge() is only ever invoked from a command or a user
  * clicking "Take Challenge" on a notification.
  */
-export class VsCodeLmProvider implements AIProvider {
+export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'vscode-lm' as const;
   readonly label: string;
 
   constructor(private readonly model: vscode.LanguageModelChat) {
+    super();
     this.label = `VS Code Language Model (${model.name})`;
   }
 
@@ -47,6 +49,7 @@ export class VsCodeLmProvider implements AIProvider {
   async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateGenerationPayload(extractJsonObject(text));
   }
@@ -54,6 +57,7 @@ export class VsCodeLmProvider implements AIProvider {
   async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
     const { system, user } = buildEvaluationPrompt(ctx);
     const text = await this.send(system, user);
+    this.recordRawResponse(text);
     if (!text) return undefined;
     return validateEvaluationPayload(extractJsonObject(text));
   }

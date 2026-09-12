@@ -53,8 +53,13 @@ export async function tryGenerateAIQuestion(
     return undefined;
   }
   if (!payload) {
-    getLogger().warn('AI question generation returned no usable payload', { provider: provider.id });
-    onFailure?.('the model did not return a usable question (invalid, unparseable, or empty response)');
+    const preview = provider.getLastRawResponsePreview();
+    getLogger().warn('AI question generation returned no usable payload', { provider: provider.id, preview });
+    onFailure?.(
+      preview
+        ? `the model's response didn't match the expected format — it said: "${preview}"`
+        : 'the model returned an empty response',
+    );
     return undefined;
   }
 

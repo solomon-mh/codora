@@ -48,4 +48,11 @@ export interface AIProvider {
   readonly label: string;
   generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;
+  /**
+   * A truncated preview of the most recent raw model response — only
+   * meaningful immediately after a generateQuestion/evaluateFreeText call
+   * that returned undefined, to diagnose *why* (e.g. the model answered in
+   * prose instead of JSON) instead of a bare "invalid response".
+   */
+  getLastRawResponsePreview(): string | undefined;
 }
