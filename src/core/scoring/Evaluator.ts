@@ -2,13 +2,13 @@ import type { ChallengeAnswer, GeneratedQuestion } from '../questions/QuestionTy
 import type { EvaluationResult } from './ScoreTypes';
 
 /**
- * Answer evaluation contract (spec section 17's JSON shape). This pass
- * ships exactly one implementation, DeterministicEvaluator — nothing else
- * depends on evaluation being deterministic, so a future LLM-backed
- * evaluator can implement this interface without touching any caller.
+ * Answer evaluation contract (spec section 17's JSON shape). Async because
+ * an AI-backed implementation needs a network/model round trip;
+ * DeterministicEvaluator just resolves immediately. See HybridEvaluator
+ * for how an AI evaluator composes with this one as a fallback.
  */
 export interface Evaluator {
-  evaluate(question: GeneratedQuestion, answer: ChallengeAnswer): EvaluationResult;
+  evaluate(question: GeneratedQuestion, answer: ChallengeAnswer): Promise<EvaluationResult>;
 }
 
 function normalizeWords(text: string): string[] {
@@ -26,7 +26,7 @@ function normalizeWords(text: string): string[] {
  * rather than punitive, per spec section 19's "don't shame users" rule.
  */
 export class DeterministicEvaluator implements Evaluator {
-  evaluate(question: GeneratedQuestion, answer: ChallengeAnswer): EvaluationResult {
+  async evaluate(question: GeneratedQuestion, answer: ChallengeAnswer): Promise<EvaluationResult> {
     if (question.body.kind === 'multiple-choice') {
       return this.evaluateMultipleChoice(question, answer);
     }

@@ -40,16 +40,16 @@ function freeTextQuestion(): GeneratedQuestion {
 }
 
 describe('DeterministicEvaluator - multiple choice', () => {
-  it('scores the correct option as fully correct', () => {
+  it('scores the correct option as fully correct', async () => {
     const answer: ChallengeAnswer = { questionId: 'q1', kind: 'multiple-choice', selectedOptionId: 'a', answeredAt: 0, timeTakenMs: 0 };
-    const result = evaluator.evaluate(mcQuestion(), answer);
+    const result = await evaluator.evaluate(mcQuestion(), answer);
     expect(result.correct).toBe(true);
     expect(result.score).toBe(1);
   });
 
-  it('scores a wrong option as incorrect and reveals the right answer', () => {
+  it('scores a wrong option as incorrect and reveals the right answer', async () => {
     const answer: ChallengeAnswer = { questionId: 'q1', kind: 'multiple-choice', selectedOptionId: 'b', answeredAt: 0, timeTakenMs: 0 };
-    const result = evaluator.evaluate(mcQuestion(), answer);
+    const result = await evaluator.evaluate(mcQuestion(), answer);
     expect(result.correct).toBe(false);
     expect(result.score).toBe(0);
     expect(result.gaps[0]).toContain('the total');
@@ -57,7 +57,7 @@ describe('DeterministicEvaluator - multiple choice', () => {
 });
 
 describe('DeterministicEvaluator - free text', () => {
-  it('gives high score when the answer covers the rubric keywords with enough detail', () => {
+  it('gives high score when the answer covers the rubric keywords with enough detail', async () => {
     const answer: ChallengeAnswer = {
       questionId: 'q2',
       kind: 'free-text',
@@ -65,14 +65,14 @@ describe('DeterministicEvaluator - free text', () => {
       answeredAt: 0,
       timeTakenMs: 0,
     };
-    const result = evaluator.evaluate(freeTextQuestion(), answer);
+    const result = await evaluator.evaluate(freeTextQuestion(), answer);
     expect(result.correct).toBe(true);
     expect(result.score).toBeGreaterThan(0.5);
   });
 
-  it('gives a low score for an empty or trivial answer', () => {
+  it('gives a low score for an empty or trivial answer', async () => {
     const answer: ChallengeAnswer = { questionId: 'q2', kind: 'free-text', text: 'idk', answeredAt: 0, timeTakenMs: 0 };
-    const result = evaluator.evaluate(freeTextQuestion(), answer);
+    const result = await evaluator.evaluate(freeTextQuestion(), answer);
     expect(result.correct).toBe(false);
   });
 });
