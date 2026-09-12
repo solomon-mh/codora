@@ -1,10 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type {
   ExtensionToSidebarMessage,
   SidebarState,
   SidebarToExtensionMessage,
 } from '../shared/messages';
+import {
+  IconClock,
+  IconCube,
+  IconFlame,
+  IconGrid,
+  IconPlay,
+  IconSpark,
+} from '../shared/Icons';
 
 const vscode = getVsCodeApi<SidebarToExtensionMessage>();
 
@@ -21,72 +30,104 @@ export function App(): JSX.Element {
   }, []);
 
   if (!state) {
-    return <div style={{ padding: 16 }} className="codora-muted">Loading…</div>;
+    return (
+      <div className="side">
+        <div className="c-skeleton" style={{ height: 86 }} />
+        <div className="c-skeleton" style={{ height: 34 }} />
+        <div className="c-skeleton" style={{ height: 60 }} />
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: '12px' }}>
-      <button className="codora-btn" style={{ width: '100%', marginBottom: 12 }} onClick={() => vscode.postMessage({ type: 'openDashboard' })}>
-        🧠 Dashboard
-      </button>
+    <div className="side c-enter">
+      <div className="side-brand">
+        <span className="side-brand-mark">
+          <IconSpark size={13} strokeWidth={1.8} />
+        </span>
+        <span className="side-brand-name">Codora</span>
+      </div>
 
-      <Section title="CHALLENGE">
-        <RowButton label="Take a challenge now" onClick={() => vscode.postMessage({ type: 'startChallenge' })} />
-        {state.challengesPaused && <div className="codora-muted" style={{ fontSize: 11, marginTop: 4 }}>Challenges are paused</div>}
-      </Section>
-
-      <Section title="PROGRESS">
-        {state.breakdown.length === 0 && (
-          <div className="codora-muted" style={{ fontSize: 12 }}>{state.insightHint}</div>
-        )}
-        {state.breakdown.map((item) => (
-          <ProgressRow key={item.category} label={item.label} value={item.value} />
-        ))}
-      </Section>
-
-      <Section title="PROJECT">
-        <div style={{ fontSize: 12 }}>{state.projectName}</div>
-      </Section>
-
-      <div style={{ borderTop: '1px solid var(--codora-border)', marginTop: 16, paddingTop: 12 }}>
-        <div style={{ fontSize: 12 }}>🔥 {state.streakCurrent} day streak</div>
-        <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span className="codora-muted" style={{ fontSize: 11 }}>Aura</span>
-          <span style={{ fontSize: 22, fontWeight: 600 }}>{state.hasEnoughData ? Math.round(state.aura ?? 0) : '—'}</span>
+      <div className="side-hero">
+        <div className="c-label" style={{ marginBottom: 7 }}>Aura</div>
+        <div className="side-hero-value">
+          <span className="side-hero-number">
+            {state.hasEnoughData ? Math.round(state.aura ?? 0) : '—'}
+          </span>
+          {state.hasEnoughData && <span className="c-muted" style={{ fontSize: 11 }}>/ 100</span>}
         </div>
-        {state.hasEnoughData && <div className="codora-muted" style={{ fontSize: 11 }}>{state.auraLabel}</div>}
+        <div className="c-muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+          {state.hasEnoughData ? state.auraLabel : 'Not enough data yet'}
+        </div>
+        <div className="side-hero-foot">
+          <span className={`c-streak${state.streakCurrent > 0 ? '' : ' is-zero'}`}>
+            <IconFlame size={14} />
+            <span className="c-streak-value">{state.streakCurrent}</span>
+            <span className="c-streak-label">day streak</span>
+          </span>
+        </div>
       </div>
+
+      <div className="side-actions">
+        <button className="c-btn c-btn-block" onClick={() => vscode.postMessage({ type: 'startChallenge' })}>
+          <IconPlay size={12} />
+          Take a challenge
+        </button>
+        <button className="c-btn-ghost c-btn-block" onClick={() => vscode.postMessage({ type: 'openDashboard' })}>
+          <IconGrid size={13} />
+          Open dashboard
+        </button>
+      </div>
+
+      {state.challengesPaused && (
+        <div className="side-note">
+          <IconClock size={13} />
+          Challenges are paused
+        </div>
+      )}
+
+      <Section title="Progress">
+        {state.breakdown.length === 0 ? (
+          <div className="c-muted" style={{ fontSize: 11.5, lineHeight: 1.5 }}>{state.insightHint}</div>
+        ) : (
+          state.breakdown.map((item) => (
+            <div className="side-row" key={item.category}>
+              <div className="side-row-head">
+                <span className="side-row-name">{item.label}</span>
+                <span className="side-row-value">
+                  {item.sampleCount > 0 ? Math.round(item.value) : '–'}
+                </span>
+              </div>
+              <div className="c-meter">
+                {item.sampleCount > 0 && (
+                  <div
+                    className="c-meter-fill"
+                    style={{ width: `${Math.max(3, Math.min(100, item.value))}%` }}
+                  />
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </Section>
+
+      <Section title="Project">
+        <div className="side-project" title={state.projectName}>
+          <span style={{ color: 'var(--fg-faint)', display: 'flex' }}>
+            <IconCube size={13} />
+          </span>
+          <span className="side-project-name">{state.projectName}</span>
+        </div>
+      </Section>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
+function Section({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div className="codora-muted" style={{ fontSize: 10, letterSpacing: 0.5, marginBottom: 6 }}>{title}</div>
+    <div>
+      <div className="c-label side-section-title">{title}</div>
       {children}
-    </div>
-  );
-}
-
-function RowButton({ label, onClick }: { label: string; onClick: () => void }): JSX.Element {
-  return (
-    <button className="codora-btn-secondary" style={{ width: '100%', textAlign: 'left' }} onClick={onClick}>
-      {label}
-    </button>
-  );
-}
-
-function ProgressRow({ label, value }: { label: string; value: number }): JSX.Element {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-        <span>{label}</span>
-        <span className="codora-muted">{Math.round(value)}</span>
-      </div>
-      <div className="codora-progress-track">
-        <div className="codora-progress-fill" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
-      </div>
     </div>
   );
 }

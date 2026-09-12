@@ -1,0 +1,115 @@
+/*
+ * Onboarding: a single centered column. Two decisions only (how often, what
+ * about), so the page can afford a large title and generous spacing.
+ */
+
+.onb {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 56px 24px 64px;
+}
+
+.onb-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+  margin-bottom: 20px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 10px 28px -10px rgba(61, 141, 201, 0.6);
+}
+
+.onb-title {
+  margin: 0 0 8px;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.onb-tagline {
+  margin: 0 0 18px;
+  font-size: 15px;
+  color: var(--fg-secondary);
+  line-height: 1.5;
+}
+
+/* The product's one-line premise — deliberately the loudest small text here. */
+.onb-claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  margin-bottom: 30px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-pill);
+  background: var(--accent-softer);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.onb-card {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  margin-bottom: 12px;
+}
+
+.onb-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+.onb-card-hint {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.onb-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onb-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.onb-privacy {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-inset);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.onb-privacy-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--fg-faint);
+}
+
+@media (max-width: 520px) {
+  .onb {
+    padding: 32px 16px 48px;
+  }
+
+  .onb-title {
+    font-size: 27px;
+  }
+}
