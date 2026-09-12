@@ -185,6 +185,15 @@
           ],
           "default": "gpt-4o-mini",
           "description": "Model used for the manual OpenAI API key fallback (only used when no VS Code Language Model is available)."
+        },
+        "codora.ai.geminiModel": {
+          "type": "string",
+          "enum": [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash"
+          ],
+          "default": "gemini-2.5-flash",
+          "description": "Model used for the manual Gemini API key fallback (only used when no VS Code Language Model is available)."
         }
       }
     }
@@ -212,6 +221,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
+    "@google/genai": "^2.22.0",
     "openai": "^7.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

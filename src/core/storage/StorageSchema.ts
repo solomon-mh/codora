@@ -8,6 +8,7 @@ export type ChallengeInterval = '10min' | '30min' | '1hour' | 'custom' | 'adapti
 export type DifficultySetting = 'adaptive' | 'easy' | 'medium' | 'hard';
 export type AnthropicModel = 'claude-haiku-4-5' | 'claude-sonnet-5' | 'claude-opus-5';
 export type OpenAIModel = 'gpt-4o-mini' | 'gpt-4o';
+export type GeminiModel = 'gemini-2.5-flash' | 'gemini-2.0-flash';
 
 export interface CodoraSettings {
   challengeInterval: ChallengeInterval;
@@ -33,6 +34,8 @@ export interface CodoraSettings {
     anthropicModel: AnthropicModel;
     /** Model for the manual OpenAI API key fallback (only used when no VS Code Language Model is available). */
     openAIModel: OpenAIModel;
+    /** Model for the manual Gemini API key fallback (only used when no VS Code Language Model is available). */
+    geminiModel: GeminiModel;
   };
 }
 
@@ -83,6 +86,6 @@ export function defaultSettings(): CodoraSettings {
     notifications: { challenge: true, dailyProgress: true, weeklySummary: true },
     avoidInterrupting: { debugging: true, testsRunning: true, gitOperations: true },
     doNotDisturb: false,
-    ai: { enabled: true, anthropicModel: 'claude-haiku-4-5', openAIModel: 'gpt-4o-mini' },
+    ai: { enabled: true, anthropicModel: 'claude-haiku-4-5', openAIModel: 'gpt-4o-mini', geminiModel: 'gemini-2.5-flash' },
   };
 }

@@ -36,15 +36,17 @@ export interface AIEvaluationPayload {
 }
 
 /**
- * A source of AI-generated questions and evaluations. Three
+ * A source of AI-generated questions and evaluations. Four
  * implementations exist: VsCodeLmProvider (whatever chat model the
- * developer already has, e.g. GitHub Copilot), and two manual-API-key
- * fallbacks — AnthropicProvider and OpenAIProvider — used only when no VS
- * Code Language Model is available. All are optional — QuestionEngine and
- * the scoring layer work fully offline without any of them.
+ * developer already has, e.g. GitHub Copilot), and three manual-API-key
+ * fallbacks — AnthropicProvider, OpenAIProvider, and GeminiProvider — used
+ * only when no VS Code Language Model is available, or when it's
+ * available but not actually producing usable output. All are optional —
+ * QuestionEngine and the scoring layer work fully offline without any of
+ * them.
  */
 export interface AIProvider {
-  readonly id: 'vscode-lm' | 'anthropic' | 'openai';
+  readonly id: 'vscode-lm' | 'anthropic' | 'openai' | 'gemini';
   readonly label: string;
   generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;
