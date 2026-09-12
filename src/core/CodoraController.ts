@@ -12,7 +12,7 @@ import { HybridEvaluator } from './scoring/HybridEvaluator';
 import { updateRollingScore, computeAura } from './scoring/ScoreEngine';
 import { recordChallengeCompletion, applyStreakDecay } from './scoring/StreakEngine';
 import { evaluateBadges } from './badges/BadgeEngine';
-import { generateQuestion } from './questions/QuestionGenerator';
+import { tryGenerateAIQuestion } from './questions/AIQuestionGenerator';
 import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeCategory, type ChallengeAnswer, type ChallengeRecord, type GeneratedQuestion } from './questions/QuestionTypes';
 import type { CodoraSettings } from './storage/StorageSchema';
 import { AIProviderResolver, type AIStatus } from './ai/AIProviderResolver';
@@ -214,7 +214,7 @@ export class CodoraController implements vscode.Disposable {
 
     let followUp: GeneratedQuestion | undefined;
     if (!question.followUpToChallengeId && isShallowFreeTextAnswer(question, answer)) {
-      followUp = this.tryGenerateFollowUp(question);
+      followUp = await this.tryGenerateFollowUp(question);
     }
     this.pendingQuestion = followUp ?? null;
 
@@ -222,15 +222,16 @@ export class CodoraController implements vscode.Disposable {
     return { evaluation, auraDelta, followUp };
   }
 
-  private tryGenerateFollowUp(question: GeneratedQuestion): GeneratedQuestion | undefined {
-    // A basic follow-up (spec section 20): re-ask a "prediction" question
-    // about the same function so a shallow free-text description doesn't
-    // score the same as real understanding. Only fires when the subject
-    // function can be re-read and re-analyzed for real guard-clause facts
-    // — same "skip rather than guess" rule as every other template.
+  /**
+   * A follow-up (spec section 20): probe the same function again so a
+   * shallow free-text description doesn't score the same as real
+   * understanding. Uses the same AI providers as the original question and
+   * simply skips when none can produce one — there's no template fallback.
+   */
+  private async tryGenerateFollowUp(question: GeneratedQuestion): Promise<GeneratedQuestion | undefined> {
     const relPath = question.provenance.sourceFiles[0];
     const fnName = question.provenance.subjectFunction;
-    if (!relPath || !fnName) return undefined;
+    if (!relPath || this.activeAIProviders.length === 0) return undefined;
 
     const fullPath = path.join(this.workspaceFolder.uri.fsPath, relPath);
     let text: string;
@@ -240,18 +241,21 @@ export class CodoraController implements vscode.Disposable {
       return undefined;
     }
 
-    const fn = extractFunctions(text, relPath).find((f) => f.name === fnName);
-    if (!fn) return undefined;
+    const fn = fnName ? extractFunctions(text, relPath).find((f) => f.name === fnName) : undefined;
+    const candidate = { file: { relativePath: relPath, text }, fn, commitMessage: null };
 
-    const followUp = generateQuestion('prediction', {
-      file: { relativePath: relPath, text },
-      fn,
-      commitMessage: null,
-      now: Date.now(),
-      isRetentionCheck: false,
-    });
-
-    return followUp ? { ...followUp, followUpToChallengeId: question.id } : undefined;
+    for (const provider of this.activeAIProviders) {
+      const followUp = await tryGenerateAIQuestion(
+        provider,
+        'reasoning',
+        'prediction',
+        question.difficulty,
+        candidate,
+        false,
+      );
+      if (followUp) return { ...followUp, followUpToChallengeId: question.id };
+    }
+    return undefined;
   }
 
   private computeStaleSubjectFiles(challenges: ChallengeRecord[]): Set<string> {

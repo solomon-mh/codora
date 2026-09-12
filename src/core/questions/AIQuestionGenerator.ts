@@ -1,9 +1,16 @@
 import { newId } from '../../utils/id';
 import { getLogger } from '../../utils/logger';
+import { isRetryableProviderError } from '../ai/classifyProviderError';
 import type { AIProvider } from '../ai/AITypes';
 import type { FunctionInfo } from '../context/CodeContextExtractor';
-import type { FileContext } from './QuestionGenerator';
-import type { ChallengeCategory, Difficulty, GeneratedQuestion, QuestionBody, QuestionType } from './QuestionTypes';
+import type {
+  ChallengeCategory,
+  Difficulty,
+  FileContext,
+  GeneratedQuestion,
+  QuestionBody,
+  QuestionType,
+} from './QuestionTypes';
 
 const MAX_SNIPPET_CHARS = 3000;
 
@@ -21,8 +28,10 @@ export interface AICandidate {
  * "skip rather than guess" contract every template already follows.
  *
  * `onFailure`, when given, receives a human-readable reason for the most
- * recent failure — used to surface *why* AI generation didn't work instead
- * of silently landing on a deterministic template with no explanation.
+ * recent failure, plus whether retrying this provider could plausibly
+ * help — used to surface *why* AI generation didn't work, and to stop
+ * burning quota on a provider whose error (bad key, exhausted quota,
+ * retired model) will fail identically every time.
  */
 export async function tryGenerateAIQuestion(
   provider: AIProvider,
@@ -31,7 +40,7 @@ export async function tryGenerateAIQuestion(
   difficulty: Difficulty,
   candidate: AICandidate,
   isRetentionCheck: boolean,
-  onFailure?: (reason: string) => void,
+  onFailure?: (reason: string, retryable: boolean) => void,
 ): Promise<GeneratedQuestion | undefined> {
   const codeSnippet = (candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim();
   if (!codeSnippet) return undefined;
@@ -48,17 +57,21 @@ export async function tryGenerateAIQuestion(
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    getLogger().warn('AI question generation failed', { provider: provider.id, error: reason });
-    onFailure?.(reason);
+    const retryable = isRetryableProviderError(err);
+    getLogger().warn('AI question generation failed', { provider: provider.id, error: reason, retryable });
+    onFailure?.(reason, retryable);
     return undefined;
   }
   if (!payload) {
     const preview = provider.getLastRawResponsePreview();
     getLogger().warn('AI question generation returned no usable payload', { provider: provider.id, preview });
+    // A different code snippet may well produce a valid question, so this
+    // is worth another attempt — unlike an auth/quota error.
     onFailure?.(
       preview
         ? `the model's response didn't match the expected format — it said: "${preview}"`
         : 'the model returned an empty response',
+      true,
     );
     return undefined;
   }

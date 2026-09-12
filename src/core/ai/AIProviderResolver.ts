@@ -23,10 +23,12 @@ const KEY_HINTS = {
 
 /**
  * Resolves which AI backend(s) Codora should try, and in what order, and
- * prompts to configure one only when nothing is available and the user
- * hasn't already said "not now" (spec: AI is an optional enhancement,
- * never a requirement — see DeterministicEvaluator and the template-based
- * QuestionEngine, which work with no AI at all).
+ * prompts to configure one when nothing is available. Question generation
+ * is AI-only — there is no local-template fallback — so when this returns
+ * nothing, no challenge is offered and the caller explains why. (Answer
+ * *evaluation* still degrades gracefully: multiple choice is always scored
+ * locally by exact match, and DeterministicEvaluator backs up free-text
+ * scoring if a provider fails mid-challenge.)
  *
  * Returns a *list*, not a single winner: a VS Code Language Model can
  * resolve successfully (a model handle exists) while still failing to

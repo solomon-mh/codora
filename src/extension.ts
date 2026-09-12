@@ -100,6 +100,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand('codora.configureAI', () => void controller.configureAI()),
+    vscode.commands.registerCommand('codora.showOutput', () => channel.show()),
   );
 
   context.subscriptions.push(controller);
