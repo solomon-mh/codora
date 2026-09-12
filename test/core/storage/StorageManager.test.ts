@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StorageManager } from '../../../src/core/storage/StorageManager';
+import { defaultSettings } from '../../../src/core/storage/StorageSchema';
 import { initLogger } from '../../../src/utils/logger';
 
 initLogger({ appendLine: () => {} });
@@ -62,5 +63,43 @@ describe('StorageManager', () => {
     await storage.updateProjectData((p) => ({ ...p, projectName: 'changed' }));
     await storage.resetProjectData();
     expect(storage.getProjectData().projectName).toBe('my-project');
+  });
+
+  it('fills in AI settings missing from a profile stored before they existed', () => {
+    const storage = new StorageManager(context, 'proj1', 'my-project');
+    // A profile whose `settings` predates the `ai` block entirely.
+    context.globalState.update('codora.globalProfile', {
+      ...storage.getGlobalProfile(),
+      settings: { ...defaultSettings(), ai: undefined },
+    });
+    const ai = storage.getGlobalProfile().settings.ai;
+    expect(ai.enabled).toBe(true);
+    expect(ai.geminiModel).toBe(defaultSettings().ai.geminiModel);
+  });
+
+  it('replaces a retired model id with the current default instead of keeping it forever', () => {
+    const storage = new StorageManager(context, 'proj1', 'my-project');
+    const profile = storage.getGlobalProfile();
+    context.globalState.update('codora.globalProfile', {
+      ...profile,
+      settings: {
+        ...profile.settings,
+        // A model id that was valid when it was stored but has since been retired.
+        ai: { ...profile.settings.ai, geminiModel: 'gemini-2.5-flash' },
+      },
+    });
+
+    expect(storage.getGlobalProfile().settings.ai.geminiModel).toBe(defaultSettings().ai.geminiModel);
+  });
+
+  it('keeps a stored model id that is still supported', () => {
+    const storage = new StorageManager(context, 'proj1', 'my-project');
+    const profile = storage.getGlobalProfile();
+    context.globalState.update('codora.globalProfile', {
+      ...profile,
+      settings: { ...profile.settings, ai: { ...profile.settings.ai, anthropicModel: 'claude-opus-5' } },
+    });
+
+    expect(storage.getGlobalProfile().settings.ai.anthropicModel).toBe('claude-opus-5');
   });
 });

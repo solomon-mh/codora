@@ -13,6 +13,14 @@ const SECRET_KEY_GEMINI = 'codora.geminiApiKey';
 
 export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'gemini' | 'none-configured' | 'disabled';
 
+/** Per-provider key shapes, used to catch a key pasted into the wrong provider's slot at entry time. */
+const KEY_HINTS = {
+  anthropic: { placeholder: 'sk-ant-...', expected: '"sk-ant-"', pattern: /^sk-ant-/ },
+  openai: { placeholder: 'sk-...', expected: '"sk-"', pattern: /^sk-/ },
+  // Google issues both the classic "AIza..." AI Studio keys and newer "AQ."-prefixed ones.
+  gemini: { placeholder: 'AIza... or AQ....', expected: '"AIza" or "AQ."', pattern: /^(AIza|AQ\.)/ },
+} as const;
+
 /**
  * Resolves which AI backend(s) Codora should try, and in what order, and
  * prompts to configure one only when nothing is available and the user
@@ -97,13 +105,21 @@ export class AIProviderResolver {
 
   private async promptToConfigure(forced: boolean): Promise<AIProvider | undefined> {
     const options = forced
-      ? ['Use Available AI', 'Set API Key', 'Cancel']
+      ? ['Use Available AI', 'Set API Key', 'Clear Stored Keys', 'Cancel']
       : ['Use Available AI', 'Set API Key', 'Not Now'];
 
     const choice = await vscode.window.showInformationMessage(
       'Codora can generate richer questions and evaluate free-text answers using an AI model. Use one?',
       ...options,
     );
+
+    if (choice === 'Clear Stored Keys') {
+      await this.clearManualApiKeys();
+      void vscode.window.showInformationMessage(
+        'Codora: cleared all stored API keys. Run "Codora: Configure AI Provider" again to set one.',
+      );
+      return undefined;
+    }
 
     if (choice === 'Use Available AI') {
       const lm = await VsCodeLmProvider.resolve();
@@ -139,7 +155,19 @@ export class AIProviderResolver {
       prompt: `Enter your ${provider.label} API key — stored locally in VS Code secret storage, never synced or logged`,
       password: true,
       ignoreFocusOut: true,
-      placeHolder: provider.id === 'anthropic' ? 'sk-ant-...' : provider.id === 'openai' ? 'sk-...' : 'AIza...',
+      placeHolder: KEY_HINTS[provider.id].placeholder,
+      // Catches the easy mistake of pasting one provider's key into
+      // another's slot, which otherwise only shows up much later as an
+      // opaque 401 buried in the output channel.
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) return 'An API key is required.';
+        const hint = KEY_HINTS[provider.id];
+        if (!hint.pattern.test(trimmed)) {
+          return `That doesn't look like ${provider.label} key (expected it to start with ${hint.expected}). Check you picked the right provider.`;
+        }
+        return undefined;
+      },
     });
     if (!key) return undefined;
 

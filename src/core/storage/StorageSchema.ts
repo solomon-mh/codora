@@ -8,7 +8,31 @@ export type ChallengeInterval = '10min' | '30min' | '1hour' | 'custom' | 'adapti
 export type DifficultySetting = 'adaptive' | 'easy' | 'medium' | 'hard';
 export type AnthropicModel = 'claude-haiku-4-5' | 'claude-sonnet-5' | 'claude-opus-5';
 export type OpenAIModel = 'gpt-4o-mini' | 'gpt-4o';
-export type GeminiModel = 'gemini-2.5-flash' | 'gemini-2.0-flash';
+/**
+ * Gemini's 2.x flash models return 404 "no longer available to new users"
+ * for newly issued API keys; Google's own error response recommends
+ * gemini-3.6-flash, which is why that's the default here.
+ */
+export type GeminiModel = 'gemini-3.6-flash' | 'gemini-3.8-flash' | 'gemini-3.1-flash-lite';
+
+/**
+ * The currently-valid values for each model setting. Providers retire
+ * model ids over time, and a retired id persisted in stored settings would
+ * otherwise keep 404-ing forever with no way to self-heal — so
+ * StorageManager validates stored values against these and falls back to
+ * the default when a stored id is no longer one of them.
+ */
+export const VALID_ANTHROPIC_MODELS: readonly AnthropicModel[] = [
+  'claude-haiku-4-5',
+  'claude-sonnet-5',
+  'claude-opus-5',
+];
+export const VALID_OPENAI_MODELS: readonly OpenAIModel[] = ['gpt-4o-mini', 'gpt-4o'];
+export const VALID_GEMINI_MODELS: readonly GeminiModel[] = [
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+  'gemini-3.1-flash-lite',
+];
 
 export interface CodoraSettings {
   challengeInterval: ChallengeInterval;
@@ -86,6 +110,6 @@ export function defaultSettings(): CodoraSettings {
     notifications: { challenge: true, dailyProgress: true, weeklySummary: true },
     avoidInterrupting: { debugging: true, testsRunning: true, gitOperations: true },
     doNotDisturb: false,
-    ai: { enabled: true, anthropicModel: 'claude-haiku-4-5', openAIModel: 'gpt-4o-mini', geminiModel: 'gemini-2.5-flash' },
+    ai: { enabled: true, anthropicModel: 'claude-haiku-4-5', openAIModel: 'gpt-4o-mini', geminiModel: 'gemini-3.6-flash' },
   };
 }

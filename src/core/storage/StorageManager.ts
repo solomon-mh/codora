@@ -1,6 +1,9 @@
 import type * as vscode from 'vscode';
 import {
   SCHEMA_VERSION,
+  VALID_ANTHROPIC_MODELS,
+  VALID_GEMINI_MODELS,
+  VALID_OPENAI_MODELS,
   type GlobalProfile,
   type ProjectData,
   defaultSettings,
@@ -23,6 +26,16 @@ function defaultGlobalProfile(): GlobalProfile {
     challengesPausedUntil: null,
     aiPromptDismissed: false,
   };
+}
+
+/** Keeps a stored model id only if it's still one the extension supports, else falls back to the current default. */
+function validModel<T extends string>(stored: T, valid: readonly T[], fallback: T): T {
+  if (valid.includes(stored)) return stored;
+  getLogger().warn('Stored model id is no longer supported, falling back to the default', {
+    stored,
+    fallback,
+  });
+  return fallback;
 }
 
 function defaultProjectData(projectId: string, projectName: string): ProjectData {
@@ -101,6 +114,7 @@ export class StorageManager {
       // profile stored before such an addition would otherwise be missing
       // a nested object (e.g. `settings.ai`) that later code assumes exists.
       const defaults = defaultSettings();
+      const storedAi = { ...defaults.ai, ...migrated.settings.ai };
       return {
         ...migrated,
         aiPromptDismissed: migrated.aiPromptDismissed ?? false,
@@ -109,7 +123,14 @@ export class StorageManager {
           ...migrated.settings,
           notifications: { ...defaults.notifications, ...migrated.settings.notifications },
           avoidInterrupting: { ...defaults.avoidInterrupting, ...migrated.settings.avoidInterrupting },
-          ai: { ...defaults.ai, ...migrated.settings.ai },
+          ai: {
+            ...storedAi,
+            // Providers retire model ids; a retired id persisted here would
+            // otherwise keep failing forever with no way to self-heal.
+            anthropicModel: validModel(storedAi.anthropicModel, VALID_ANTHROPIC_MODELS, defaults.ai.anthropicModel),
+            openAIModel: validModel(storedAi.openAIModel, VALID_OPENAI_MODELS, defaults.ai.openAIModel),
+            geminiModel: validModel(storedAi.geminiModel, VALID_GEMINI_MODELS, defaults.ai.geminiModel),
+          },
         },
       };
     } catch (err) {
