@@ -8,8 +8,12 @@
   "engines": {
     "vscode": "^1.93.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -31,28 +35,66 @@
       ]
     },
     "commands": [
-      { "command": "codora.openDashboard", "title": "Codora: Open Dashboard" },
-      { "command": "codora.startChallenge", "title": "Codora: Start Challenge" },
-      { "command": "codora.pauseChallenges", "title": "Codora: Pause Challenges" },
-      { "command": "codora.resumeChallenges", "title": "Codora: Resume Challenges" },
-      { "command": "codora.showAura", "title": "Codora: Show Aura" },
-      { "command": "codora.showProgress", "title": "Codora: Show Progress" },
-      { "command": "codora.startDeepChallenge", "title": "Codora: Start Deep Challenge" },
-      { "command": "codora.resetProjectData", "title": "Codora: Reset Project Data" },
-      { "command": "codora.configureAI", "title": "Codora: Configure AI Provider" }
+      {
+        "command": "codora.openDashboard",
+        "title": "Codora: Open Dashboard"
+      },
+      {
+        "command": "codora.startChallenge",
+        "title": "Codora: Start Challenge"
+      },
+      {
+        "command": "codora.pauseChallenges",
+        "title": "Codora: Pause Challenges"
+      },
+      {
+        "command": "codora.resumeChallenges",
+        "title": "Codora: Resume Challenges"
+      },
+      {
+        "command": "codora.showAura",
+        "title": "Codora: Show Aura"
+      },
+      {
+        "command": "codora.showProgress",
+        "title": "Codora: Show Progress"
+      },
+      {
+        "command": "codora.startDeepChallenge",
+        "title": "Codora: Start Deep Challenge"
+      },
+      {
+        "command": "codora.resetProjectData",
+        "title": "Codora: Reset Project Data"
+      },
+      {
+        "command": "codora.configureAI",
+        "title": "Codora: Configure AI Provider"
+      }
     ],
     "configuration": {
       "title": "Codora",
       "properties": {
         "codora.challengeInterval": {
           "type": "string",
-          "enum": ["10min", "30min", "1hour", "adaptive", "off"],
+          "enum": [
+            "10min",
+            "30min",
+            "1hour",
+            "adaptive",
+            "off"
+          ],
           "default": "30min",
           "description": "How often (in active coding time) Codora offers a comprehension challenge."
         },
         "codora.difficulty": {
           "type": "string",
-          "enum": ["adaptive", "easy", "medium", "hard"],
+          "enum": [
+            "adaptive",
+            "easy",
+            "medium",
+            "hard"
+          ],
           "default": "adaptive",
           "description": "Challenge difficulty."
         },
@@ -60,9 +102,25 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["recall", "reasoning", "debugging", "architecture", "testing", "security", "performance"]
+            "enum": [
+              "recall",
+              "reasoning",
+              "debugging",
+              "architecture",
+              "testing",
+              "security",
+              "performance"
+            ]
           },
-          "default": ["recall", "reasoning", "debugging", "architecture", "testing", "security", "performance"],
+          "default": [
+            "recall",
+            "reasoning",
+            "debugging",
+            "architecture",
+            "testing",
+            "security",
+            "performance"
+          ],
           "description": "Enabled challenge categories."
         },
         "codora.notifications.challenge": {
@@ -80,9 +138,18 @@
           "default": true,
           "description": "Show a weekly summary."
         },
-        "codora.avoidInterrupting.debugging": { "type": "boolean", "default": true },
-        "codora.avoidInterrupting.testsRunning": { "type": "boolean", "default": true },
-        "codora.avoidInterrupting.gitOperations": { "type": "boolean", "default": true },
+        "codora.avoidInterrupting.debugging": {
+          "type": "boolean",
+          "default": true
+        },
+        "codora.avoidInterrupting.testsRunning": {
+          "type": "boolean",
+          "default": true
+        },
+        "codora.avoidInterrupting.gitOperations": {
+          "type": "boolean",
+          "default": true
+        },
         "codora.doNotDisturb": {
           "type": "boolean",
           "default": false,
@@ -95,9 +162,22 @@
         },
         "codora.ai.anthropicModel": {
           "type": "string",
-          "enum": ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"],
+          "enum": [
+            "claude-haiku-4-5",
+            "claude-sonnet-5",
+            "claude-opus-5"
+          ],
           "default": "claude-haiku-4-5",
           "description": "Model used for the manual Anthropic API key fallback (only used when no VS Code Language Model is available)."
+        },
+        "codora.ai.openAIModel": {
+          "type": "string",
+          "enum": [
+            "gpt-4o-mini",
+            "gpt-4o"
+          ],
+          "default": "gpt-4o-mini",
+          "description": "Model used for the manual OpenAI API key fallback (only used when no VS Code Language Model is available)."
         }
       }
     }
@@ -125,6 +205,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
+    "openai": "^7.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

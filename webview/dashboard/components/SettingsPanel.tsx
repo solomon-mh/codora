@@ -135,6 +135,7 @@ function aiStatusLabel(status: AIStatus): string {
   switch (status) {
     case 'vscode-lm': return 'Using a VS Code Language Model (e.g. GitHub Copilot)';
     case 'anthropic': return 'Using a manually configured Anthropic API key';
+    case 'openai': return 'Using a manually configured OpenAI API key';
     case 'none-configured': return 'Not configured — falling back to local deterministic challenges';
     case 'disabled': return 'Disabled — using local deterministic challenges only';
   }

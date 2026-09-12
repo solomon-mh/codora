@@ -1,13 +1,15 @@
 import * as vscode from 'vscode';
 import { VsCodeLmProvider } from './VsCodeLmProvider';
 import { AnthropicProvider } from './AnthropicProvider';
+import { OpenAIProvider } from './OpenAIProvider';
 import type { AIProvider } from './AITypes';
 import type { StorageManager } from '../storage/StorageManager';
-import type { AnthropicModel } from '../storage/StorageSchema';
+import type { CodoraSettings } from '../storage/StorageSchema';
 
 const SECRET_KEY_ANTHROPIC = 'codora.anthropicApiKey';
+const SECRET_KEY_OPENAI = 'codora.openaiApiKey';
 
-export type AIStatus = 'vscode-lm' | 'anthropic' | 'none-configured' | 'disabled';
+export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'none-configured' | 'disabled';
 
 /**
  * Resolves which AI backend (if any) Codora should use, preferring
@@ -31,7 +33,7 @@ export class AIProviderResolver {
     const lm = await VsCodeLmProvider.resolve();
     if (lm) return lm;
 
-    return this.getConfiguredAnthropic(settings.ai.anthropicModel);
+    return this.getConfiguredManualProvider(settings.ai);
   }
 
   /**
@@ -57,8 +59,9 @@ export class AIProviderResolver {
     return this.promptToConfigure(true);
   }
 
-  async clearAnthropicKey(): Promise<void> {
+  async clearManualApiKeys(): Promise<void> {
     await this.secrets.delete(SECRET_KEY_ANTHROPIC);
+    await this.secrets.delete(SECRET_KEY_OPENAI);
   }
 
   async getStatus(): Promise<AIStatus> {
@@ -66,13 +69,14 @@ export class AIProviderResolver {
     if (!settings.ai.enabled) return 'disabled';
     if (await VsCodeLmProvider.resolve()) return 'vscode-lm';
     if (await this.secrets.get(SECRET_KEY_ANTHROPIC)) return 'anthropic';
+    if (await this.secrets.get(SECRET_KEY_OPENAI)) return 'openai';
     return 'none-configured';
   }
 
   private async promptToConfigure(forced: boolean): Promise<AIProvider | undefined> {
     const options = forced
-      ? ['Use Available AI', 'Set Anthropic API Key', 'Cancel']
-      : ['Use Available AI', 'Set Anthropic API Key', 'Not Now'];
+      ? ['Use Available AI', 'Set API Key', 'Cancel']
+      : ['Use Available AI', 'Set API Key', 'Not Now'];
 
     const choice = await vscode.window.showInformationMessage(
       'Codora can generate richer questions and evaluate free-text answers using an AI model. Use one?',
@@ -83,13 +87,13 @@ export class AIProviderResolver {
       const lm = await VsCodeLmProvider.resolve();
       if (lm) return lm;
       void vscode.window.showWarningMessage(
-        'Codora: no AI model is currently available in VS Code. Install/enable an extension that provides one (e.g. GitHub Copilot Chat), or set an Anthropic API key instead.',
+        'Codora: no AI model is currently available in VS Code. This needs an extension that registers one via the Language Model API — for GitHub Copilot specifically, that means the "GitHub Copilot Chat" extension (not just base Copilot completions), installed, enabled, and with an active Copilot entitlement — an open Copilot Chat panel is the quickest way to confirm that. Or set an API key instead.',
       );
       return undefined;
     }
 
-    if (choice === 'Set Anthropic API Key') {
-      return this.promptForAnthropicKey();
+    if (choice === 'Set API Key') {
+      return this.promptForApiKey();
     }
 
     if (!forced) {
@@ -98,22 +102,40 @@ export class AIProviderResolver {
     return undefined;
   }
 
-  private async promptForAnthropicKey(): Promise<AnthropicProvider | undefined> {
+  private async promptForApiKey(): Promise<AIProvider | undefined> {
+    const provider = await vscode.window.showQuickPick(
+      [
+        { label: 'Anthropic', description: 'Claude models', id: 'anthropic' as const },
+        { label: 'OpenAI', description: 'GPT models', id: 'openai' as const },
+      ],
+      { placeHolder: 'Which provider is your API key for?' },
+    );
+    if (!provider) return undefined;
+
     const key = await vscode.window.showInputBox({
-      prompt: 'Enter your Anthropic API key — stored locally in VS Code secret storage, never synced or logged',
+      prompt: `Enter your ${provider.label} API key — stored locally in VS Code secret storage, never synced or logged`,
       password: true,
       ignoreFocusOut: true,
-      placeHolder: 'sk-ant-...',
+      placeHolder: provider.id === 'anthropic' ? 'sk-ant-...' : 'sk-...',
     });
     if (!key) return undefined;
 
-    await this.secrets.store(SECRET_KEY_ANTHROPIC, key);
-    const model = this.storage.getGlobalProfile().settings.ai.anthropicModel;
-    return new AnthropicProvider(key, model);
+    const settings = this.storage.getGlobalProfile().settings;
+    if (provider.id === 'anthropic') {
+      await this.secrets.store(SECRET_KEY_ANTHROPIC, key);
+      return new AnthropicProvider(key, settings.ai.anthropicModel);
+    }
+    await this.secrets.store(SECRET_KEY_OPENAI, key);
+    return new OpenAIProvider(key, settings.ai.openAIModel);
   }
 
-  private async getConfiguredAnthropic(model: AnthropicModel): Promise<AnthropicProvider | undefined> {
-    const key = await this.secrets.get(SECRET_KEY_ANTHROPIC);
-    return key ? new AnthropicProvider(key, model) : undefined;
+  private async getConfiguredManualProvider(aiSettings: CodoraSettings['ai']): Promise<AIProvider | undefined> {
+    const anthropicKey = await this.secrets.get(SECRET_KEY_ANTHROPIC);
+    if (anthropicKey) return new AnthropicProvider(anthropicKey, aiSettings.anthropicModel);
+
+    const openaiKey = await this.secrets.get(SECRET_KEY_OPENAI);
+    if (openaiKey) return new OpenAIProvider(openaiKey, aiSettings.openAIModel);
+
+    return undefined;
   }
 }
