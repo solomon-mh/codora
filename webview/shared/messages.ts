@@ -91,18 +91,41 @@ export type DashboardToExtensionMessage =
 export type ExtensionToDashboardMessage = { type: 'state'; payload: DashboardState };
 
 /** What the challenge panel can ask the extension to do when it can't show a question. */
-export type ChallengeUnavailableAction = 'configure-ai' | 'open-settings' | 'show-logs';
+export type ChallengeUnavailableAction =
+  | 'configure-ai'
+  | 'open-settings'
+  | 'show-logs'
+  | 'setup-vscode-lm'
+  | 'setup-anthropic'
+  | 'setup-openai'
+  | 'setup-gemini';
+
+/** One provider the user can set up directly from the panel. */
+export interface ChallengeSetupOption {
+  label: string;
+  hint: string;
+  kind: ChallengeUnavailableAction;
+  /** True when this provider already has a key stored — offering to replace it rather than add it. */
+  alreadyConfigured?: boolean;
+}
 
 /**
  * Shown in the challenge panel in place of a question. Question generation
  * is AI-only, so "couldn't generate one" is a normal, explainable state
- * that belongs where the question would have been — with the action that
- * fixes it — rather than only as a toast the user can miss.
+ * that belongs where the question would have been — with the actions that
+ * fix it — rather than only as a toast the user can miss.
+ *
+ * `setupOptions` lets the panel offer each provider as its own button, so
+ * configuring one is a single click instead of a command + quick-pick.
+ * Key *entry* still happens in VS Code's native masked input box (see
+ * AIProviderResolver.setUpProvider) — a secret never passes through the
+ * webview.
  */
 export interface ChallengeUnavailable {
   title: string;
   detail: string;
   action?: { label: string; kind: ChallengeUnavailableAction };
+  setupOptions?: ChallengeSetupOption[];
 }
 
 export type ChallengeToExtensionMessage =

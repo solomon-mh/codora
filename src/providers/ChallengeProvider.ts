@@ -2,11 +2,13 @@ import * as vscode from 'vscode';
 import { getWebviewHtml } from './webviewHtml';
 import { CodoraController } from '../core/CodoraController';
 import type {
+  ChallengeSetupOption,
   ChallengeToExtensionMessage,
   ChallengeUnavailable,
   ChallengeUnavailableAction,
   ExtensionToChallengeMessage,
 } from '../../webview/shared/messages';
+import type { ManualProviderId } from '../core/ai/AIProviderResolver';
 import type { GeneratedQuestion } from '../core/questions/QuestionTypes';
 import { getLogger } from '../utils/logger';
 
@@ -16,6 +18,14 @@ type PendingView =
   | { kind: 'unavailable'; payload: ChallengeUnavailable };
 
 const MAX_REASON_CHARS = 220;
+
+/** Maps a panel setup button to the provider AIProviderResolver should configure. */
+const SETUP_TARGETS = {
+  'setup-vscode-lm': 'vscode-lm',
+  'setup-anthropic': 'anthropic',
+  'setup-openai': 'openai',
+  'setup-gemini': 'gemini',
+} as const satisfies Record<string, ManualProviderId | 'vscode-lm'>;
 
 /**
  * Provider errors are frequently a wall of JSON (a Gemini quota error is
@@ -123,8 +133,8 @@ export class ChallengeProvider {
       return {
         title: 'No AI provider configured',
         detail:
-          "Codora needs an AI model to write questions about your code. Use whatever you already have in VS Code (e.g. GitHub Copilot Chat), or add an Anthropic, OpenAI, or Gemini API key — it's stored locally in VS Code's secret storage.",
-        action: { label: 'Configure AI Provider', kind: 'configure-ai' },
+          "Codora needs an AI model to write questions about your code. Pick one below — keys are stored in VS Code's secret storage, never in settings and never logged.",
+        setupOptions: await this.buildSetupOptions(),
       };
     }
 
@@ -139,10 +149,50 @@ export class ChallengeProvider {
     return {
       title: 'No provider could generate a challenge right now',
       detail: reported
-        ? `Every configured AI provider was tried:\n\n${reported}\n\nNothing was asked rather than falling back to a canned question.`
+        ? `Every configured AI provider was tried:\n\n${reported}\n\nNothing was asked rather than falling back to a canned question. If a quota is exhausted, adding another provider below will get you unblocked.`
         : 'Every configured AI provider was tried and none returned a usable question. This can also mean there were no meaningful recent code changes to ask about.',
       action: { label: 'Show Logs', kind: 'show-logs' },
+      // Offered here too: when the failure is an exhausted quota, adding a
+      // different provider is the actual fix, and it should be reachable
+      // without hunting for a command.
+      setupOptions: await this.buildSetupOptions(),
     };
+  }
+
+  /**
+   * The provider choices rendered in the panel. Clicking one goes straight
+   * to that provider's setup — for a manual key that means VS Code's
+   * native masked input box, so the key never passes through the webview.
+   */
+  private async buildSetupOptions(): Promise<ChallengeSetupOption[]> {
+    const configured = new Set((await this.controller.aiResolver.resolveCandidates()).map((p) => p.id));
+
+    return [
+      {
+        label: 'Use AI already in VS Code',
+        hint: 'GitHub Copilot Chat or any extension providing a chat model — no key needed',
+        kind: 'setup-vscode-lm',
+        alreadyConfigured: configured.has('vscode-lm'),
+      },
+      {
+        label: 'Anthropic API key',
+        hint: 'Claude models · console.anthropic.com',
+        kind: 'setup-anthropic',
+        alreadyConfigured: configured.has('anthropic'),
+      },
+      {
+        label: 'OpenAI API key',
+        hint: 'GPT models · platform.openai.com',
+        kind: 'setup-openai',
+        alreadyConfigured: configured.has('openai'),
+      },
+      {
+        label: 'Gemini API key',
+        hint: 'Google AI Studio · aistudio.google.com',
+        kind: 'setup-gemini',
+        alreadyConfigured: configured.has('gemini'),
+      },
+    ];
   }
 
   private async handleMessage(message: ChallengeToExtensionMessage): Promise<void> {
@@ -194,6 +244,18 @@ export class ChallengeProvider {
       case 'show-logs':
         await vscode.commands.executeCommand('codora.showOutput');
         return;
+      case 'setup-vscode-lm':
+      case 'setup-anthropic':
+      case 'setup-openai':
+      case 'setup-gemini': {
+        const target = SETUP_TARGETS[action];
+        const provider = await this.controller.aiResolver.setUpProvider(target);
+        // Only retry if setup actually produced a provider — otherwise the
+        // user cancelled the input box, and immediately re-running would
+        // just replace this panel's message with an identical one.
+        if (provider) await this.open();
+        return;
+      }
     }
   }
 

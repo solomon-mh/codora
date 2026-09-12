@@ -756,7 +756,13 @@ with the question                 • 'disabled'        → "AI-assisted challen
                                   Nothing canned is ever substituted for a question.
 ```
 
-**Why the panel opens on failure rather than just showing a toast:** a notification is easy to miss and disappears, and the three causes need different fixes. Rendering the reason in the same space a question would occupy — with the fixing action attached — makes the state unambiguous. `ChallengeUnavailable` (`messages.ts`) carries `{title, detail, action}`; the webview's `UnavailableView` renders it, and `action` round-trips back as `{type:'action', payload:'configure-ai'|'open-settings'|'show-logs'}`. Choosing **Configure AI Provider** re-runs generation immediately afterward, so a successful setup turns straight into a question without the user triggering another challenge by hand.
+**Why the panel opens on failure rather than just showing a toast:** a notification is easy to miss and disappears, and the three causes need different fixes. Rendering the reason in the same space a question would occupy — with the fixing action attached — makes the state unambiguous. `ChallengeUnavailable` (`messages.ts`) carries `{title, detail, action, setupOptions}`; the webview's `UnavailableView` renders it, and both `action` and each setup option round-trip back as `{type:'action', payload: ChallengeUnavailableAction}`.
+
+**Provider setup happens in the panel.** `setupOptions` lists each provider as its own button — "Use AI already in VS Code", plus Anthropic / OpenAI / Gemini keys, each with a hint and an "already set up, replace" marker derived from `resolveCandidates()`. Clicking one calls `AIProviderResolver.setUpProvider(target)`, which skips the command + quick-pick entirely and goes straight to that provider's setup. On success the panel immediately re-runs generation, so finishing setup turns directly into a question; on cancel it deliberately does *not* retry, since that would just replace the message with an identical one.
+
+These options appear both when nothing is configured **and** when every configured provider failed — if the failure is an exhausted quota, adding a different provider is the actual fix and shouldn't require hunting for a command.
+
+**The key itself never passes through the webview.** `setUpProvider` collects it via `vscode.window.showInputBox({password: true})` with the same per-provider format validation described in [§29](#29-security-architecture). A webview text field would route the secret through webview JS and the `postMessage` boundary; the native box keeps it out of both.
 
 Provider errors are summarized for display by `summarizeReason()`: a provider error is often a wall of JSON (a Gemini quota error is ~1.5KB), so it extracts `error.message` when the payload is JSON and caps the result at 220 characters — the untruncated text always remains in the output channel.
 

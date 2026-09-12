@@ -13,6 +13,15 @@ const SECRET_KEY_GEMINI = 'codora.geminiApiKey';
 
 export type AIStatus = 'vscode-lm' | 'anthropic' | 'openai' | 'gemini' | 'none-configured' | 'disabled';
 
+/** Providers configured by pasting an API key (i.e. everything except the VS Code Language Model). */
+export type ManualProviderId = 'anthropic' | 'openai' | 'gemini';
+
+const PROVIDER_LABELS: Record<ManualProviderId, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+};
+
 /** Per-provider key shapes, used to catch a key pasted into the wrong provider's slot at entry time. */
 const KEY_HINTS = {
   anthropic: { placeholder: 'sk-ant-...', expected: '"sk-ant-"', pattern: /^sk-ant-/ },
@@ -152,21 +161,47 @@ export class AIProviderResolver {
       { placeHolder: 'Which provider is your API key for?' },
     );
     if (!provider) return undefined;
+    return this.promptForProviderKey(provider.id);
+  }
+
+  /**
+   * Sets up one specific provider, skipping the "which provider?" step.
+   * Used when the choice has already been made elsewhere — e.g. the
+   * challenge panel offers each provider as its own button.
+   *
+   * The key itself is always collected through VS Code's native masked
+   * input box, never through a webview field, so a secret never travels
+   * through webview JS or the postMessage boundary.
+   */
+  async setUpProvider(target: ManualProviderId | 'vscode-lm'): Promise<AIProvider | undefined> {
+    if (target === 'vscode-lm') {
+      const lm = await VsCodeLmProvider.resolve();
+      if (lm) return lm;
+      void vscode.window.showWarningMessage(
+        'Codora: no AI model is currently available in VS Code. This needs an extension that registers one via the Language Model API — for GitHub Copilot specifically, that means the "GitHub Copilot Chat" extension (not just base Copilot completions), installed, enabled, and with an active Copilot entitlement — an open Copilot Chat panel is the quickest way to confirm that. Or set an API key instead.',
+      );
+      return undefined;
+    }
+    return this.promptForProviderKey(target);
+  }
+
+  private async promptForProviderKey(providerId: ManualProviderId): Promise<AIProvider | undefined> {
+    const hint = KEY_HINTS[providerId];
+    const label = PROVIDER_LABELS[providerId];
 
     const key = await vscode.window.showInputBox({
-      prompt: `Enter your ${provider.label} API key — stored locally in VS Code secret storage, never synced or logged`,
+      prompt: `Enter your ${label} API key — stored locally in VS Code secret storage, never synced or logged`,
       password: true,
       ignoreFocusOut: true,
-      placeHolder: KEY_HINTS[provider.id].placeholder,
+      placeHolder: hint.placeholder,
       // Catches the easy mistake of pasting one provider's key into
       // another's slot, which otherwise only shows up much later as an
       // opaque 401 buried in the output channel.
       validateInput: (value) => {
         const trimmed = value.trim();
         if (!trimmed) return 'An API key is required.';
-        const hint = KEY_HINTS[provider.id];
         if (!hint.pattern.test(trimmed)) {
-          return `That doesn't look like ${provider.label} key (expected it to start with ${hint.expected}). Check you picked the right provider.`;
+          return `That doesn't look like a ${label} key (expected it to start with ${hint.expected}). Check you picked the right provider.`;
         }
         return undefined;
       },
@@ -174,11 +209,11 @@ export class AIProviderResolver {
     if (!key) return undefined;
 
     const settings = this.storage.getGlobalProfile().settings;
-    if (provider.id === 'anthropic') {
+    if (providerId === 'anthropic') {
       await this.secrets.store(SECRET_KEY_ANTHROPIC, key);
       return new AnthropicProvider(key, settings.ai.anthropicModel);
     }
-    if (provider.id === 'openai') {
+    if (providerId === 'openai') {
       await this.secrets.store(SECRET_KEY_OPENAI, key);
       return new OpenAIProvider(key, settings.ai.openAIModel);
     }

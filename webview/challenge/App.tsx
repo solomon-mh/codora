@@ -204,6 +204,37 @@ function UnavailableView({ state }: { state: ChallengeUnavailable }): JSX.Elemen
           {state.detail}
         </div>
 
+        {state.setupOptions && state.setupOptions.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div
+              className="codora-muted"
+              style={{ fontSize: 10, letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}
+            >
+              Configure a provider
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {state.setupOptions.map((option) => (
+                <button
+                  key={option.kind}
+                  className="codora-btn-secondary"
+                  style={{ textAlign: 'left', padding: '8px 10px' }}
+                  onClick={() => vscode.postMessage({ type: 'action', payload: option.kind })}
+                >
+                  <div style={{ fontSize: 13 }}>
+                    {option.label}
+                    {option.alreadyConfigured && (
+                      <span className="codora-muted" style={{ fontSize: 11 }}> · already set up, replace</span>
+                    )}
+                  </div>
+                  <div className="codora-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                    {option.hint}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {state.action && (
             <button
