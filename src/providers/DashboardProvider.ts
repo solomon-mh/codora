@@ -12,13 +12,13 @@ export class DashboardProvider {
     private readonly controller: CodoraController,
     private readonly onStartChallenge: () => void,
   ) {
-    controller.onDidChangeState(() => this.postState());
+    controller.onDidChangeState(() => void this.postState());
   }
 
   reveal(): void {
     if (this.panel) {
       this.panel.reveal();
-      this.postState();
+      void this.postState();
       return;
     }
 
@@ -31,7 +31,7 @@ export class DashboardProvider {
     this.panel.webview.onDidReceiveMessage((message: DashboardToExtensionMessage) => {
       switch (message.type) {
         case 'ready':
-          this.postState();
+          void this.postState();
           break;
         case 'startChallenge':
           this.onStartChallenge();
@@ -42,6 +42,9 @@ export class DashboardProvider {
         case 'updateSettings':
           void this.controller.updateSettings(message.payload);
           break;
+        case 'configureAI':
+          void this.controller.configureAI();
+          break;
       }
     });
 
@@ -50,14 +53,15 @@ export class DashboardProvider {
     });
   }
 
-  private postState(): void {
+  private async postState(): Promise<void> {
     if (!this.panel) return;
     const global = this.controller.storage.getGlobalProfile();
     const project = this.controller.storage.getProjectData();
+    const aiStatus = await this.controller.getAIStatus();
     const message: ExtensionToDashboardMessage = {
       type: 'state',
-      payload: buildDashboardState(global, project, Date.now()),
+      payload: { ...buildDashboardState(global, project, Date.now()), aiStatus },
     };
-    this.panel.webview.postMessage(message);
+    this.panel?.webview.postMessage(message);
   }
 }

@@ -1,4 +1,5 @@
 import type { CodoraSettings } from '../../../src/core/storage/StorageSchema';
+import type { AIStatus } from '../../../src/core/ai/AIProviderResolver';
 
 const INTERVAL_OPTIONS: CodoraSettings['challengeInterval'][] = ['10min', '30min', '1hour', 'adaptive', 'off'];
 const DIFFICULTY_OPTIONS: CodoraSettings['difficulty'][] = ['adaptive', 'easy', 'medium', 'hard'];
@@ -6,12 +7,16 @@ const ALL_CATEGORIES = ['recall', 'reasoning', 'debugging', 'architecture', 'tes
 
 export function SettingsPanel({
   settings,
+  aiStatus,
   onChange,
   onResetProjectData,
+  onConfigureAI,
 }: {
   settings: CodoraSettings;
+  aiStatus: AIStatus;
   onChange: (patch: Partial<CodoraSettings>) => void;
   onResetProjectData: () => void;
+  onConfigureAI: () => void;
 }): JSX.Element {
   const toggleCategory = (c: string) => {
     const next = settings.categories.includes(c)
@@ -74,10 +79,27 @@ export function SettingsPanel({
       </div>
 
       <div className="codora-card">
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>AI-assisted challenges</div>
+        <Checkbox
+          label="Allow Codora to use an AI model for richer questions and evaluation"
+          checked={settings.ai.enabled}
+          onChange={(v) => onChange({ ai: { ...settings.ai, enabled: v } })}
+        />
+        <div className="codora-muted" style={{ fontSize: 12, marginTop: 6, marginBottom: 10 }}>
+          Status: {aiStatusLabel(aiStatus)}
+        </div>
+        <button className="codora-btn-secondary" onClick={onConfigureAI}>
+          Configure AI Provider
+        </button>
+      </div>
+
+      <div className="codora-card">
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Privacy</div>
         <div className="codora-muted" style={{ fontSize: 12 }}>
           Your code stays on your machine by default. Codora does not upload your repository or
-          source code without your explicit permission.
+          source code without your explicit permission. AI features are opt-in: when enabled, only
+          a small, relevant code snippet — never your whole repository — is sent to whichever AI
+          model you configure.
         </div>
       </div>
 
@@ -106,5 +128,14 @@ function intervalLabel(opt: CodoraSettings['challengeInterval']): string {
     case '1hour': return '1 hour';
     case 'adaptive': return 'Adaptive';
     case 'off': return 'Off';
+  }
+}
+
+function aiStatusLabel(status: AIStatus): string {
+  switch (status) {
+    case 'vscode-lm': return 'Using a VS Code Language Model (e.g. GitHub Copilot)';
+    case 'anthropic': return 'Using a manually configured Anthropic API key';
+    case 'none-configured': return 'Not configured — falling back to local deterministic challenges';
+    case 'disabled': return 'Disabled — using local deterministic challenges only';
   }
 }

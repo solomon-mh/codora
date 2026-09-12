@@ -47,7 +47,16 @@ export function buildSidebarState(global: GlobalProfile, project: ProjectData): 
   };
 }
 
-export function buildDashboardState(global: GlobalProfile, project: ProjectData, now: number): DashboardState {
+/**
+ * Everything except `aiStatus`, which requires an async check (secret
+ * storage / vscode.lm) that doesn't belong in this otherwise-pure
+ * aggregation function — the caller (DashboardProvider) fills it in.
+ */
+export function buildDashboardState(
+  global: GlobalProfile,
+  project: ProjectData,
+  now: number,
+): Omit<DashboardState, 'aiStatus'> {
   const hasEnoughData = totalSamples(global) >= MIN_CHALLENGES_FOR_AURA;
   const globalAura = hasEnoughData ? computeAura(global.categoryScores) : null;
   const projectHasData = project.challenges.length > 0;

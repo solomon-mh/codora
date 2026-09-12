@@ -1,6 +1,7 @@
 import type { GeneratedQuestion, ChallengeAnswer } from '../../src/core/questions/QuestionTypes';
 import type { EvaluationResult, ScoreCategory } from '../../src/core/scoring/ScoreTypes';
 import type { CodoraSettings } from '../../src/core/storage/StorageSchema';
+import type { AIStatus } from '../../src/core/ai/AIProviderResolver';
 
 export interface CategoryBreakdownItem {
   category: ScoreCategory;
@@ -69,6 +70,7 @@ export interface DashboardState {
   history: HistoryItem[];
   badges: BadgeItem[];
   settings: CodoraSettings;
+  aiStatus: AIStatus;
 }
 
 export type SidebarToExtensionMessage =
@@ -82,7 +84,8 @@ export type DashboardToExtensionMessage =
   | { type: 'ready' }
   | { type: 'startChallenge' }
   | { type: 'resetProjectData' }
-  | { type: 'updateSettings'; payload: Partial<CodoraSettings> };
+  | { type: 'updateSettings'; payload: Partial<CodoraSettings> }
+  | { type: 'configureAI' };
 
 export type ExtensionToDashboardMessage = { type: 'state'; payload: DashboardState };
 

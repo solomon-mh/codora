@@ -68,8 +68,10 @@ export function App(): JSX.Element {
       {tab === 'settings' && (
         <SettingsPanel
           settings={state.settings}
+          aiStatus={state.aiStatus}
           onChange={(patch) => vscode.postMessage({ type: 'updateSettings', payload: patch })}
           onResetProjectData={() => vscode.postMessage({ type: 'resetProjectData' })}
+          onConfigureAI={() => vscode.postMessage({ type: 'configureAI' })}
         />
       )}
     </div>
