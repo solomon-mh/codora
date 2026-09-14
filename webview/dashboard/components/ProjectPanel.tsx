@@ -1,14 +1,8 @@
-import type { CategoryBreakdownItem, DashboardState } from '../../shared/messages';
+import type { DashboardState } from '../../shared/messages';
 import { IconAlert, IconCheck, IconCube, IconSpark } from '../../shared/Icons';
 import { BreakdownBars } from './BreakdownBars';
 
-export function ProjectPanel({
-  project,
-  breakdown,
-}: {
-  project: DashboardState['project'];
-  breakdown: CategoryBreakdownItem[];
-}): JSX.Element {
+export function ProjectPanel({ project }: { project: DashboardState['project'] }): JSX.Element {
   const noSignal = project.strongCategories.length === 0 && project.weakCategories.length === 0;
 
   return (
@@ -20,7 +14,7 @@ export function ProjectPanel({
             Project aura
           </div>
           <div className="stat-value">{project.aura !== null ? Math.round(project.aura) : '—'}</div>
-          <div className="stat-foot">{project.name}</div>
+          <div className="stat-foot">this workspace only</div>
         </div>
         <div className="stat">
           <div className="stat-label">
@@ -52,9 +46,10 @@ export function ProjectPanel({
         <section className="panel">
           <div className="panel-head">
             <span className="panel-head-title c-label">Score by category</span>
+            <span className="c-pill panel-head-trailing">this workspace</span>
           </div>
-          {breakdown.length > 0 ? (
-            <BreakdownBars breakdown={breakdown} />
+          {project.breakdown.length > 0 ? (
+            <BreakdownBars breakdown={project.breakdown} />
           ) : (
             <div className="c-empty">
               <span className="c-empty-icon">

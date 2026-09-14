@@ -33,6 +33,7 @@ export function AuraCard({
           <IconTarget size={13} />
           Your aura
         </span>
+        <span className="c-pill">all workspaces</span>
         {hasEnoughData && delta !== null && (
           <span className={`c-pill panel-head-trailing ${delta >= 0 ? 'c-pill-good' : 'c-pill-critical'}`}>
             {delta >= 0 ? <IconArrowUp size={11} strokeWidth={2.2} /> : <IconArrowDown size={11} strokeWidth={2.2} />}

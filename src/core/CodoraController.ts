@@ -194,12 +194,18 @@ export class CodoraController implements vscode.Disposable {
 
     const record: ChallengeRecord = { question, answer, evaluation };
 
-    await this.storage.updateProjectData((project) => ({
-      ...project,
-      challenges: [...project.challenges, record],
-      categoryScores: updateRollingScore(project.categoryScores, scoreCategory, evaluation.score, now),
-      auraHistory: appendAuraSnapshot(project.auraHistory, computeAura(project.categoryScores), now),
-    }));
+    await this.storage.updateProjectData((project) => {
+      // Snapshot the scores *after* this answer lands. Computing the aura from
+      // project.categoryScores here would read the pre-update map and leave the
+      // project's history permanently one answer behind.
+      const categoryScores = updateRollingScore(project.categoryScores, scoreCategory, evaluation.score, now);
+      return {
+        ...project,
+        challenges: [...project.challenges, record],
+        categoryScores,
+        auraHistory: appendAuraSnapshot(project.auraHistory, computeAura(categoryScores), now),
+      };
+    });
 
     const global = await this.storage.updateGlobalProfile((profile) => {
       const decayedStreak = applyStreakDecay(profile.streak, now);

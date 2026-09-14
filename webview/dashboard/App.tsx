@@ -135,9 +135,9 @@ export function App(): JSX.Element {
               <h1 className="dash-greeting">{greeting()}</h1>
               <p className="dash-subgreeting">
                 {state.hasEnoughData
-                  ? `Your aura is ${state.auraLabel.toLowerCase()} across ${state.project.challenges} challenge${
-                      state.project.challenges === 1 ? '' : 's'
-                    } in ${state.project.name}.`
+                  ? `Your aura is ${state.auraLabel.toLowerCase()} across every workspace. You've answered ${
+                      state.project.challenges
+                    } challenge${state.project.challenges === 1 ? '' : 's'} in ${state.project.name}.`
                   : `Codora is still learning how well you know ${state.project.name}.`}
               </p>
 
@@ -172,7 +172,7 @@ export function App(): JSX.Element {
             <div className="c-enter" key="project">
               <h1 className="dash-greeting">{state.project.name}</h1>
               <p className="dash-subgreeting">How well you know this workspace.</p>
-              <ProjectPanel project={state.project} breakdown={state.breakdown} />
+              <ProjectPanel project={state.project} />
             </div>
           )}
 

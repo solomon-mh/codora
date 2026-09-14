@@ -65,6 +65,12 @@ export interface DashboardState {
     name: string;
     aura: number | null;
     challenges: number;
+    /**
+     * Scored per-category for THIS workspace. Distinct from the top-level
+     * `breakdown`, which is global: the project view must not mix a project
+     * aura with global category bars, or the two disagree on screen.
+     */
+    breakdown: CategoryBreakdownItem[];
     strongCategories: string[];
     weakCategories: string[];
   };
