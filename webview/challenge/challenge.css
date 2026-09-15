@@ -1,0 +1,255 @@
+/*
+ * Challenge panel: one question, centered, in a single column. Everything here
+ * is sized so the question itself is the largest thing on screen and the
+ * supporting metadata stays quiet.
+ */
+
+.chal {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 26px 24px 40px;
+}
+
+.chal-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.chal-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+.chal-head-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.chal-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.chal-prompt {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 550;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+}
+
+.chal-reason {
+  display: flex;
+  gap: 7px;
+  margin: 0 0 22px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.chal-reason-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--fg-faint);
+}
+
+.chal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+/* Option rows carry real prose, so they align to the top and wrap. */
+.chal-option {
+  align-items: flex-start;
+  padding: 13px 14px;
+  line-height: 1.5;
+}
+
+.chal-option .c-radio {
+  margin-top: 1px;
+}
+
+.chal-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.chal-counter {
+  margin-top: 6px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.chal-hint {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+}
+
+/* ---------- Result ---------- */
+
+.chal-result-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  margin-bottom: 14px;
+}
+
+.chal-result-head.is-correct {
+  border-color: rgba(63, 208, 127, 0.3);
+  background: linear-gradient(180deg, var(--good-soft), transparent);
+}
+
+.chal-result-head.is-missed {
+  border-color: rgba(245, 181, 68, 0.28);
+  background: linear-gradient(180deg, var(--warn-soft), transparent);
+}
+
+.chal-result-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+
+.chal-result-icon.is-correct {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.chal-result-icon.is-missed {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.chal-result-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.chal-block {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.chal-list-row {
+  display: flex;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.chal-list-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---------- Unavailable / setup ---------- */
+
+.chal-setup-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.chal-setup-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--accent-ring);
+}
+
+.chal-setup-btn:hover .chal-setup-arrow {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+.chal-setup-arrow {
+  margin-left: auto;
+  flex: none;
+  color: var(--fg-faint);
+  transition: color 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.chal-setup-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--surface-3);
+  color: var(--fg-secondary);
+}
+
+.chal-detail {
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg-secondary);
+}
+
+/* ---------- Loading ---------- */
+
+.chal-loading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 26px 24px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.chal-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-3);
+  border-top-color: var(--accent);
+  animation: chal-spin 0.7s linear infinite;
+}
+
+@keyframes chal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

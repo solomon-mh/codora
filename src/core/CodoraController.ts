@@ -12,7 +12,7 @@ import { HybridEvaluator } from './scoring/HybridEvaluator';
 import { updateRollingScore, computeAura } from './scoring/ScoreEngine';
 import { recordChallengeCompletion, applyStreakDecay } from './scoring/StreakEngine';
 import { evaluateBadges } from './badges/BadgeEngine';
-import { generateQuestion } from './questions/QuestionGenerator';
+import { tryGenerateAIQuestion } from './questions/AIQuestionGenerator';
 import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeCategory, type ChallengeAnswer, type ChallengeRecord, type GeneratedQuestion } from './questions/QuestionTypes';
 import type { CodoraSettings } from './storage/StorageSchema';
 import { AIProviderResolver, type AIStatus } from './ai/AIProviderResolver';
@@ -49,8 +49,8 @@ export class CodoraController implements vscode.Disposable {
   private pendingQuestion: GeneratedQuestion | null = null;
   /** AI providers (if any) resolved for the in-flight challenge, in priority order, reused for its evaluation. */
   private activeAIProviders: AIProvider[] = [];
-  /** Shown once per session: "no AI provider was even tried, and here's why" — the silent version of this was impossible to distinguish from "AI tried and failed". */
-  private hasWarnedNoProviders = false;
+  /** Per-provider failure reasons from the most recent generateChallenge(), surfaced in the challenge panel. */
+  private lastAIFailures: { provider: string; reason?: string }[] = [];
 
   constructor(
     context: vscode.ExtensionContext,
@@ -124,6 +124,9 @@ export class CodoraController implements vscode.Disposable {
       aiPromptDismissed: global.aiPromptDismissed,
     });
     if (this.activeAIProviders.length === 0) {
+      // The challenge panel reports this to the user (see
+      // ChallengeProvider.describeUnavailable) — logged here so the precise
+      // cause is still recoverable from the output channel.
       let reason: string;
       if (!global.settings.ai.enabled) {
         reason = 'AI is turned off (Dashboard → Settings → "Allow Codora to use an AI model" is unchecked)';
@@ -133,27 +136,30 @@ export class CodoraController implements vscode.Disposable {
         reason = 'nothing is configured and nothing is available via VS Code';
       }
       getLogger().warn(`No AI provider will be tried this challenge: ${reason}`);
-      if (!this.hasWarnedNoProviders) {
-        this.hasWarnedNoProviders = true;
-        void vscode.window.showWarningMessage(
-          `Codora: every challenge is using local templates because ${reason}. Run "Codora: Configure AI Provider" to fix this.`,
-        );
-      }
     }
 
+    // Reset per challenge: these are the reasons *this* attempt failed, and
+    // they're what the panel shows instead of a generic guess.
+    this.lastAIFailures = [];
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
       categoryScores: global.categoryScores,
       staleSubjectFiles,
       recentFingerprints,
       aiProviders: this.activeAIProviders,
+      onProviderFailure: (provider, reason) => this.lastAIFailures.push({ provider, reason }),
     });
 
     this.pendingQuestion = question ?? null;
     if (!question) {
-      getLogger().info('Challenge skipped: no confident question available');
+      getLogger().info('Challenge skipped: no AI provider produced a question');
     }
     return question;
+  }
+
+  /** Why each provider failed during the most recent generateChallenge(), for the UI to report verbatim. */
+  getLastAIFailures(): ReadonlyArray<{ provider: string; reason?: string }> {
+    return this.lastAIFailures;
   }
 
   getPendingQuestion(): GeneratedQuestion | null {
@@ -188,12 +194,18 @@ export class CodoraController implements vscode.Disposable {
 
     const record: ChallengeRecord = { question, answer, evaluation };
 
-    await this.storage.updateProjectData((project) => ({
-      ...project,
-      challenges: [...project.challenges, record],
-      categoryScores: updateRollingScore(project.categoryScores, scoreCategory, evaluation.score, now),
-      auraHistory: appendAuraSnapshot(project.auraHistory, computeAura(project.categoryScores), now),
-    }));
+    await this.storage.updateProjectData((project) => {
+      // Snapshot the scores *after* this answer lands. Computing the aura from
+      // project.categoryScores here would read the pre-update map and leave the
+      // project's history permanently one answer behind.
+      const categoryScores = updateRollingScore(project.categoryScores, scoreCategory, evaluation.score, now);
+      return {
+        ...project,
+        challenges: [...project.challenges, record],
+        categoryScores,
+        auraHistory: appendAuraSnapshot(project.auraHistory, computeAura(categoryScores), now),
+      };
+    });
 
     const global = await this.storage.updateGlobalProfile((profile) => {
       const decayedStreak = applyStreakDecay(profile.streak, now);
@@ -214,7 +226,7 @@ export class CodoraController implements vscode.Disposable {
 
     let followUp: GeneratedQuestion | undefined;
     if (!question.followUpToChallengeId && isShallowFreeTextAnswer(question, answer)) {
-      followUp = this.tryGenerateFollowUp(question);
+      followUp = await this.tryGenerateFollowUp(question);
     }
     this.pendingQuestion = followUp ?? null;
 
@@ -222,15 +234,16 @@ export class CodoraController implements vscode.Disposable {
     return { evaluation, auraDelta, followUp };
   }
 
-  private tryGenerateFollowUp(question: GeneratedQuestion): GeneratedQuestion | undefined {
-    // A basic follow-up (spec section 20): re-ask a "prediction" question
-    // about the same function so a shallow free-text description doesn't
-    // score the same as real understanding. Only fires when the subject
-    // function can be re-read and re-analyzed for real guard-clause facts
-    // — same "skip rather than guess" rule as every other template.
+  /**
+   * A follow-up (spec section 20): probe the same function again so a
+   * shallow free-text description doesn't score the same as real
+   * understanding. Uses the same AI providers as the original question and
+   * simply skips when none can produce one — there's no template fallback.
+   */
+  private async tryGenerateFollowUp(question: GeneratedQuestion): Promise<GeneratedQuestion | undefined> {
     const relPath = question.provenance.sourceFiles[0];
     const fnName = question.provenance.subjectFunction;
-    if (!relPath || !fnName) return undefined;
+    if (!relPath || this.activeAIProviders.length === 0) return undefined;
 
     const fullPath = path.join(this.workspaceFolder.uri.fsPath, relPath);
     let text: string;
@@ -240,18 +253,21 @@ export class CodoraController implements vscode.Disposable {
       return undefined;
     }
 
-    const fn = extractFunctions(text, relPath).find((f) => f.name === fnName);
-    if (!fn) return undefined;
+    const fn = fnName ? extractFunctions(text, relPath).find((f) => f.name === fnName) : undefined;
+    const candidate = { file: { relativePath: relPath, text }, fn, commitMessage: null };
 
-    const followUp = generateQuestion('prediction', {
-      file: { relativePath: relPath, text },
-      fn,
-      commitMessage: null,
-      now: Date.now(),
-      isRetentionCheck: false,
-    });
-
-    return followUp ? { ...followUp, followUpToChallengeId: question.id } : undefined;
+    for (const provider of this.activeAIProviders) {
+      const followUp = await tryGenerateAIQuestion(
+        provider,
+        'reasoning',
+        'prediction',
+        question.difficulty,
+        candidate,
+        false,
+      );
+      if (followUp) return { ...followUp, followUpToChallengeId: question.id };
+    }
+    return undefined;
   }
 
   private computeStaleSubjectFiles(challenges: ChallengeRecord[]): Set<string> {

@@ -1,5 +1,18 @@
+import type { ReactNode } from 'react';
 import type { CodoraSettings } from '../../../src/core/storage/StorageSchema';
 import type { AIStatus } from '../../../src/core/ai/AIProviderResolver';
+import { Chip, RadioOption, SwitchRow } from '../../shared/Controls';
+import {
+  IconBell,
+  IconClock,
+  IconGauge,
+  IconKey,
+  IconLayers,
+  IconPlug,
+  IconShield,
+  IconTrash,
+} from '../../shared/Icons';
+import type { IconProps } from '../../shared/Icons';
 
 const INTERVAL_OPTIONS: CodoraSettings['challengeInterval'][] = ['10min', '30min', '1hour', 'custom', 'adaptive', 'off'];
 const DIFFICULTY_OPTIONS: CodoraSettings['difficulty'][] = ['adaptive', 'easy', 'medium', 'hard'];
@@ -25,119 +38,181 @@ export function SettingsPanel({
     onChange({ categories: next });
   };
 
+  const ai = aiDescription(aiStatus);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Challenge interval</div>
-        {INTERVAL_OPTIONS.map((opt) => (
-          <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, cursor: 'pointer' }}>
-            <input
-              type="radio"
+    <div className="set-stack">
+      <Group icon={IconClock} title="Challenge interval" hint="How much active coding time passes between challenges.">
+        <div className="set-group">
+          {INTERVAL_OPTIONS.map((opt) => (
+            <RadioOption
+              key={opt}
+              name="interval"
+              label={intervalLabel(opt)}
+              description={intervalHint(opt)}
               checked={settings.challengeInterval === opt}
               onChange={() => onChange({ challengeInterval: opt })}
+              trailing={
+                opt === 'custom' && settings.challengeInterval === 'custom' ? (
+                  <span
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <input
+                      type="number"
+                      className="c-input"
+                      min={1}
+                      style={{ width: 62 }}
+                      value={settings.customIntervalMinutes}
+                      onChange={(e) =>
+                        onChange({ customIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })
+                      }
+                    />
+                    <span className="c-muted" style={{ fontSize: 11.5 }}>min</span>
+                  </span>
+                ) : undefined
+              }
             />
-            {intervalLabel(opt)}
-            {opt === 'custom' && settings.challengeInterval === 'custom' && (
-              <>
-                <input
-                  type="number"
-                  min={1}
-                  value={settings.customIntervalMinutes}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onChange({ customIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })}
-                  style={{
-                    width: 56,
-                    background: 'var(--codora-card-bg)',
-                    color: 'var(--codora-fg)',
-                    border: '1px solid var(--codora-border)',
-                    borderRadius: 4,
-                    padding: '2px 6px',
-                  }}
-                />
-                <span className="codora-muted">minutes</span>
-              </>
-            )}
-          </label>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Difficulty</div>
-        {DIFFICULTY_OPTIONS.map((opt) => (
-          <label key={opt} style={{ display: 'block', marginBottom: 6, cursor: 'pointer', textTransform: 'capitalize' }}>
-            <input type="radio" checked={settings.difficulty === opt} onChange={() => onChange({ difficulty: opt })} /> {opt}
-          </label>
-        ))}
-      </div>
+      <Group icon={IconGauge} title="Difficulty" hint="Adaptive tracks your recent scores per category.">
+        <div className="set-group">
+          {DIFFICULTY_OPTIONS.map((opt) => (
+            <RadioOption
+              key={opt}
+              name="difficulty"
+              label={opt}
+              capitalize
+              checked={settings.difficulty === opt}
+              onChange={() => onChange({ difficulty: opt })}
+            />
+          ))}
+        </div>
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Categories</div>
-        {ALL_CATEGORIES.map((c) => (
-          <label key={c} style={{ display: 'block', marginBottom: 6, cursor: 'pointer', textTransform: 'capitalize' }}>
-            <input type="checkbox" checked={settings.categories.includes(c)} onChange={() => toggleCategory(c)} /> {c}
-          </label>
-        ))}
-      </div>
+      <Group icon={IconLayers} title="Categories" hint="Only enabled categories are ever asked about.">
+        <div className="set-chips">
+          {ALL_CATEGORIES.map((c) => (
+            <Chip
+              key={c}
+              label={c}
+              checked={settings.categories.includes(c)}
+              onChange={() => toggleCategory(c)}
+            />
+          ))}
+        </div>
+        {settings.categories.length === 0 && (
+          <div className="c-pill c-pill-critical" style={{ marginTop: 10 }}>
+            No categories enabled — Codora has nothing to ask about.
+          </div>
+        )}
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Notifications</div>
-        <Checkbox
-          label="Challenge notifications"
+      <Group icon={IconBell} title="Notifications">
+        <SwitchRow
+          label="Challenge ready"
+          description="Notify when a challenge is waiting."
           checked={settings.notifications.challenge}
           onChange={(v) => onChange({ notifications: { ...settings.notifications, challenge: v } })}
         />
-        <Checkbox
+        <SwitchRow
           label="Daily progress"
           checked={settings.notifications.dailyProgress}
           onChange={(v) => onChange({ notifications: { ...settings.notifications, dailyProgress: v } })}
         />
-        <Checkbox
+        <SwitchRow
           label="Weekly summary"
           checked={settings.notifications.weeklySummary}
           onChange={(v) => onChange({ notifications: { ...settings.notifications, weeklySummary: v } })}
         />
-      </div>
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>AI-assisted challenges</div>
-        <Checkbox
-          label="Allow Codora to use an AI model for richer questions and evaluation"
+      <Group icon={IconPlug} title="AI-assisted challenges">
+        <SwitchRow
+          label="Use an AI model"
+          description="Richer questions from your code, and free-text answers get evaluated."
           checked={settings.ai.enabled}
           onChange={(v) => onChange({ ai: { ...settings.ai, enabled: v } })}
         />
-        <div className="codora-muted" style={{ fontSize: 12, marginTop: 6, marginBottom: 10 }}>
-          Status: {aiStatusLabel(aiStatus)}
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 12,
+            padding: '10px 12px',
+            borderRadius: 'var(--r-md)',
+            background: 'var(--surface-inset)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              flex: 'none',
+              background: ai.ok ? 'var(--good)' : 'var(--warn)',
+              boxShadow: `0 0 0 3px ${ai.ok ? 'var(--good-soft)' : 'var(--warn-soft)'}`,
+            }}
+          />
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>{ai.text}</span>
         </div>
-        <button className="codora-btn-secondary" onClick={onConfigureAI}>
-          Configure AI Provider
+
+        <button className="c-btn-ghost" style={{ marginTop: 12 }} onClick={onConfigureAI}>
+          <IconKey size={13} />
+          Configure provider
         </button>
-      </div>
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Privacy</div>
-        <div className="codora-muted" style={{ fontSize: 12 }}>
-          Your code stays on your machine by default. Codora does not upload your repository or
-          source code without your explicit permission. AI features are opt-in: when enabled, only
-          a small, relevant code snippet — never your whole repository — is sent to whichever AI
-          model you configure.
-        </div>
-      </div>
+      <Group icon={IconShield} title="Privacy">
+        <p className="c-muted" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6 }}>
+          Your code stays on your machine by default. Codora never uploads your repository
+          or source code without your explicit permission. AI features are opt-in: when
+          enabled, only a small, relevant snippet — never your whole repository — is sent to
+          the model you configured.
+        </p>
+      </Group>
 
-      <div className="codora-card">
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Danger zone</div>
-        <button className="codora-btn-secondary" onClick={onResetProjectData}>
+      <Group icon={IconTrash} title="Danger zone" hint="This cannot be undone.">
+        <button className="c-btn-ghost c-btn-danger" onClick={onResetProjectData}>
+          <IconTrash size={13} />
           Reset project data
         </button>
-      </div>
+      </Group>
     </div>
   );
 }
 
-function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }): JSX.Element {
+function Group({
+  icon: Icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: (p: IconProps) => JSX.Element;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}): JSX.Element {
   return (
-    <label style={{ display: 'block', marginBottom: 6, cursor: 'pointer' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}
-    </label>
+    <section className="panel">
+      <div className="panel-head" style={{ marginBottom: hint ? 4 : 14 }}>
+        <span className="panel-head-title c-label">
+          <Icon size={13} />
+          {title}
+        </span>
+      </div>
+      {hint && (
+        <p className="c-muted" style={{ margin: '0 0 14px', fontSize: 12 }}>
+          {hint}
+        </p>
+      )}
+      {children}
+    </section>
   );
 }
 
@@ -146,19 +221,28 @@ function intervalLabel(opt: CodoraSettings['challengeInterval']): string {
     case '10min': return '10 minutes';
     case '30min': return '30 minutes';
     case '1hour': return '1 hour';
-    case 'custom': return 'Custom:';
+    case 'custom': return 'Custom';
     case 'adaptive': return 'Adaptive';
     case 'off': return 'Off';
   }
 }
 
-function aiStatusLabel(status: AIStatus): string {
+function intervalHint(opt: CodoraSettings['challengeInterval']): string | undefined {
+  switch (opt) {
+    case 'adaptive': return 'Codora picks the gap from how you have been scoring.';
+    case 'off': return 'No automatic challenges — you can still start one by hand.';
+    default: return undefined;
+  }
+}
+
+function aiDescription(status: AIStatus): { ok: boolean; text: string } {
   switch (status) {
-    case 'vscode-lm': return 'Using a VS Code Language Model (e.g. GitHub Copilot)';
-    case 'anthropic': return 'Using a manually configured Anthropic API key';
-    case 'openai': return 'Using a manually configured OpenAI API key';
-    case 'gemini': return 'Using a manually configured Gemini API key';
-    case 'none-configured': return 'Not configured — falling back to local deterministic challenges';
-    case 'disabled': return 'Disabled — using local deterministic challenges only';
+    case 'claude-cli': return { ok: true, text: 'Using the Claude Code CLI with your existing Claude sign-in.' };
+    case 'vscode-lm': return { ok: true, text: 'Using a VS Code language model (for example GitHub Copilot).' };
+    case 'anthropic': return { ok: true, text: 'Using your Anthropic API key.' };
+    case 'openai': return { ok: true, text: 'Using your OpenAI API key.' };
+    case 'gemini': return { ok: true, text: 'Using your Gemini API key.' };
+    case 'none-configured': return { ok: false, text: 'Not configured — no challenges can be generated yet.' };
+    case 'disabled': return { ok: false, text: 'Disabled — no challenges will be offered.' };
   }
 }

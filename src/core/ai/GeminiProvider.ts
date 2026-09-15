@@ -5,10 +5,11 @@ import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
-  AIGeneratedQuestionPayload,
+  AIGenerationResult,
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import { GEMINI_MODEL_NAMES } from './modelDisplayName';
 import type { GeminiModel } from '../storage/StorageSchema';
 
 /**
@@ -19,18 +20,21 @@ import type { GeminiModel } from '../storage/StorageSchema';
 export class GeminiProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'gemini' as const;
   readonly label = 'Gemini API';
+  readonly vendor = 'google' as const;
+  readonly modelName: string;
   private readonly client: GoogleGenAI;
 
   constructor(apiKey: string, private readonly model: GeminiModel) {
     super();
+    this.modelName = GEMINI_MODEL_NAMES[model];
     this.client = new GoogleGenAI({ apiKey });
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
+  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
     this.recordRawResponse(text);
-    if (!text) return undefined;
+    if (!text) return { outcome: 'unusable' };
     return validateGenerationPayload(extractJsonObject(text));
   }
 

@@ -28,13 +28,22 @@ function defaultGlobalProfile(): GlobalProfile {
   };
 }
 
+/**
+ * Logged-once set: the profile is read many times per challenge, and
+ * warning on every read buried the rest of the log in duplicates.
+ */
+const warnedRetiredModels = new Set<string>();
+
 /** Keeps a stored model id only if it's still one the extension supports, else falls back to the current default. */
 function validModel<T extends string>(stored: T, valid: readonly T[], fallback: T): T {
   if (valid.includes(stored)) return stored;
-  getLogger().warn('Stored model id is no longer supported, falling back to the default', {
-    stored,
-    fallback,
-  });
+  if (!warnedRetiredModels.has(stored)) {
+    warnedRetiredModels.add(stored);
+    getLogger().warn('Stored model id is no longer supported, falling back to the default', {
+      stored,
+      fallback,
+    });
+  }
   return fallback;
 }
 

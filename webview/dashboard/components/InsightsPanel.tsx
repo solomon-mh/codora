@@ -1,19 +1,33 @@
+import { IconBulb } from '../../shared/Icons';
 
 export function InsightsPanel({ insights }: { insights: string[] }): JSX.Element {
   return (
-    <div className="codora-card">
-      <div className="codora-muted" style={{ fontSize: 11, marginBottom: 10, letterSpacing: 0.5 }}>INSIGHTS</div>
+    <section className="panel">
+      <div className="panel-head">
+        <span className="panel-head-title c-label">
+          <IconBulb size={13} />
+          Insights
+        </span>
+      </div>
+
       {insights.length === 0 ? (
-        <div className="codora-muted" style={{ fontSize: 13 }}>
-          Keep answering challenges to unlock personalized insights.
+        <div className="c-empty">
+          <span className="c-empty-icon">
+            <IconBulb size={18} />
+          </span>
+          Keep answering challenges and Codora will start pointing out where your
+          understanding is strongest and thinnest.
         </div>
       ) : (
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
+        <div>
           {insights.map((insight) => (
-            <li key={insight} style={{ marginBottom: 6, fontSize: 13 }}>{insight}</li>
+            <div className="insight" key={insight}>
+              <span className="insight-dot" />
+              <span>{insight}</span>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </div>
+    </section>
   );
 }

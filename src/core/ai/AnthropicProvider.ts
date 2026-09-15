@@ -5,10 +5,11 @@ import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
-  AIGeneratedQuestionPayload,
+  AIGenerationResult,
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import { ANTHROPIC_MODEL_NAMES } from './modelDisplayName';
 import type { AnthropicModel } from '../storage/StorageSchema';
 
 const MAX_TOKENS = 1024;
@@ -21,18 +22,21 @@ const MAX_TOKENS = 1024;
 export class AnthropicProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'anthropic' as const;
   readonly label = 'Anthropic API';
+  readonly vendor = 'anthropic' as const;
+  readonly modelName: string;
   private readonly client: Anthropic;
 
   constructor(apiKey: string, private readonly model: AnthropicModel) {
     super();
+    this.modelName = ANTHROPIC_MODEL_NAMES[model];
     this.client = new Anthropic({ apiKey });
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
+  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
     this.recordRawResponse(text);
-    if (!text) return undefined;
+    if (!text) return { outcome: 'unusable' };
     return validateGenerationPayload(extractJsonObject(text));
   }
 

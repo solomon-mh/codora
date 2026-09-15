@@ -5,10 +5,11 @@ import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
-  AIGeneratedQuestionPayload,
+  AIGenerationResult,
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import { OPENAI_MODEL_NAMES } from './modelDisplayName';
 import type { OpenAIModel } from '../storage/StorageSchema';
 
 const MAX_COMPLETION_TOKENS = 1024;
@@ -22,18 +23,21 @@ const MAX_COMPLETION_TOKENS = 1024;
 export class OpenAIProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'openai' as const;
   readonly label = 'OpenAI API';
+  readonly vendor = 'openai' as const;
+  readonly modelName: string;
   private readonly client: OpenAI;
 
   constructor(apiKey: string, private readonly model: OpenAIModel) {
     super();
+    this.modelName = OPENAI_MODEL_NAMES[model];
     this.client = new OpenAI({ apiKey });
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
+  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
     this.recordRawResponse(text);
-    if (!text) return undefined;
+    if (!text) return { outcome: 'unusable' };
     return validateGenerationPayload(extractJsonObject(text));
   }
 

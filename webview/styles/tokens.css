@@ -1,78 +1,823 @@
+/*
+ * Codora design system.
+ *
+ * Codora paints its own dark surface rather than inheriting the VS Code theme
+ * colors: the panels are a product surface (dashboard, challenge, onboarding)
+ * with their own hierarchy, and theme variables gave us neither a stable card
+ * elevation nor a usable accent. Chart colors are the validated set — the
+ * bar/ring mark (--accent-mark) sits inside the dark lightness band and clears
+ * 3:1 on --surface-1, and every ink below clears AA body contrast on all three
+ * surfaces (--fg-faint is decorative/large-only at 3.7:1).
+ */
+
 :root {
-  --codora-bg: var(--vscode-editor-background);
-  --codora-fg: var(--vscode-editor-foreground);
-  --codora-muted: var(--vscode-descriptionForeground);
-  --codora-border: var(--vscode-widget-border, var(--vscode-panel-border));
-  --codora-accent: var(--vscode-button-background);
-  --codora-accent-fg: var(--vscode-button-foreground);
-  --codora-card-bg: var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
-  --codora-success: var(--vscode-testing-iconPassed, #3fb950);
-  --codora-error: var(--vscode-testing-iconFailed, #f85149);
-  --codora-radius: 8px;
-  --codora-space-1: 4px;
-  --codora-space-2: 8px;
-  --codora-space-3: 12px;
-  --codora-space-4: 16px;
-  --codora-space-5: 24px;
+  color-scheme: dark;
+
+  /* Surfaces, lightest-on-top elevation. */
+  --bg: #0d0d0f;
+  --surface-1: #16161a;
+  --surface-2: #1d1d22;
+  --surface-3: #24242b;
+  --surface-inset: #111114;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+
+  /* Ink. */
+  --fg: #f4f4f5;
+  --fg-secondary: #a1a1aa;
+  --fg-muted: #8b8b94;
+  --fg-faint: #71717a;
+
+  /*
+   * Brand accent, in two jobs that need different steps of one hue (244°):
+   *
+   *  --accent      pale brand tint, for ink and UI edges. 10.2-11.8:1 on every
+   *                surface below, so it is safe for small text.
+   *  --accent-ink  text that sits ON a filled accent surface (10.7:1 on the
+   *                button fill) — the pale fill needs dark type, not white.
+   *  --accent-mark chart fills. The pale tint fails the dark-mode mark gates
+   *                (L 0.835, chroma 0.047), so marks use a deeper step:
+   *                L 0.62 / C 0.12, inside the 0.48-0.67 band at 5.0:1.
+   *
+   * Blue rather than a mint/teal brand: the reserved "correct" green sits at
+   * hue 154°, and a mint accent landed 13° away from it — ΔE 9.1 under normal
+   * vision, below the 15 floor. In an app that marks answers right or wrong on
+   * every screen, the brand color must not be mistakable for the pass color.
+   * This hue measures ΔE 25 against it.
+   */
+  --accent: #b0cde6;
+  --accent-ink: #0b1a25;
+  --accent-mark: #3d8dc9;
+  /* Buttons and brand marks: the pale tint. */
+  --accent-grad: linear-gradient(180deg, #bfd8ed 0%, #91b4d2 100%);
+  /* Data fills: the deeper in-band step. Vertical for bars, horizontal for meters. */
+  --mark-grad: linear-gradient(180deg, #6cabdf 0%, #3d8dc9 100%);
+  --mark-grad-h: linear-gradient(90deg, #3d8dc9 0%, #6cabdf 100%);
+  --accent-soft: rgba(176, 205, 230, 0.15);
+  --accent-softer: rgba(176, 205, 230, 0.08);
+  --accent-ring: rgba(176, 205, 230, 0.42);
+
+  /*
+   * Streak. A flame reads orange, and a run of days is its own signal rather
+   * than brand identity — so the streak keeps the warm accent the brand gave
+   * up, which also stops it competing with --accent for attention.
+   * 8.0-8.6:1 on every surface. It sits ΔE 8.9 from --warn under normal
+   * vision, so neither may ever be color-alone: the streak always ships with
+   * the flame icon and the words "day streak".
+   */
+  --streak: #ff8f3d;
+  --streak-soft: rgba(255, 143, 61, 0.14);
+
+  /* Reserved status colors — never reused as a series color. */
+  --good: #3fd07f;
+  --good-soft: rgba(63, 208, 127, 0.14);
+  --critical: #ff6b61;
+  --critical-soft: rgba(255, 107, 97, 0.14);
+  --warn: #f5b544;
+  --warn-soft: rgba(245, 181, 68, 0.14);
+
+  /* Geometry. */
+  --r-xl: 18px;
+  --r-lg: 14px;
+  --r-md: 10px;
+  --r-sm: 7px;
+  --r-pill: 999px;
+
+  /* Type. */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace);
+
+  /* Elevation. */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
-  background: var(--codora-bg);
-  color: var(--codora-fg);
-  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* ---------- Scrollbars ---------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-pill);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #33333c;
+  background-clip: content-box;
+}
+
+/* ---------- Focus ---------- */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ---------- Type utilities ---------- */
+
+.c-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.c-muted {
+  color: var(--fg-muted);
+}
+
+.c-secondary {
+  color: var(--fg-secondary);
+}
+
+.c-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.c-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* ---------- Surfaces ---------- */
+
+.c-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+}
+
+.c-card-lg {
+  padding: 20px;
+}
+
+/* A card that reacts to the pointer — only for cards that do something. */
+.c-card-interactive {
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.c-card-interactive:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+.c-divider {
+  height: 1px;
+  background: var(--border);
+  border: none;
+  margin: 0;
+}
+
+/* ---------- Buttons ---------- */
+
+.c-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.16s var(--ease), transform 0.12s var(--ease), box-shadow 0.16s var(--ease);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, var(--shadow-1);
+}
+
+.c-btn:hover {
+  filter: brightness(1.08);
+}
+
+.c-btn:active {
+  transform: translateY(1px);
+}
+
+.c-btn:disabled {
+  background: var(--surface-3);
+  color: var(--fg-faint);
+  box-shadow: none;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.c-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
+}
+
+.c-btn-ghost:hover {
+  background: var(--surface-3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.c-btn-ghost:active {
+  transform: translateY(1px);
+}
+
+.c-btn-danger:hover {
+  border-color: var(--critical);
+  color: var(--critical);
+  background: var(--critical-soft);
+}
+
+.c-btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.c-btn-block {
+  width: 100%;
+}
+
+/* ---------- Icon button ---------- */
+
+.c-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+
+.c-icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+/* ---------- Chips & pills ---------- */
+
+.c-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--fg-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.c-pill-accent {
+  background: var(--accent-soft);
+  border-color: rgba(176, 205, 230, 0.28);
+  color: var(--accent);
+}
+
+/*
+ * A pill naming the model behind a question. Model names are supplied by
+ * whoever published the model (a `vscode.lm` entry can call itself
+ * anything at all), so the name is capped and ellipsised rather than
+ * allowed to stretch a challenge header or a history row out of shape —
+ * the badge's title attribute always carries the full text.
+ */
+.c-pill-model {
+  max-width: 168px;
+}
+
+.c-pill-model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-pill-streak {
+  background: var(--streak-soft);
+  border-color: rgba(255, 143, 61, 0.26);
+  color: var(--streak);
+}
+
+.c-pill-good {
+  background: var(--good-soft);
+  border-color: rgba(63, 208, 127, 0.25);
+  color: var(--good);
+}
+
+.c-pill-critical {
+  background: var(--critical-soft);
+  border-color: rgba(255, 107, 97, 0.25);
+  color: var(--critical);
+}
+
+/* ---------- Switch ---------- */
+
+.c-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.c-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  transition: transform 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.c-switch:checked {
+  background: var(--mark-grad-h);
+  border-color: transparent;
+}
+
+.c-switch:checked::after {
+  transform: translateX(14px);
+  background: #fff;
+}
+
+.c-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Checkbox ---------- */
+
+.c-check {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.c-check:hover {
+  border-color: var(--accent);
+}
+
+.c-check:checked {
+  background: var(--accent-mark);
+  border-color: var(--accent-mark);
+}
+
+.c-check:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ---------- Radio ---------- */
+
+.c-radio {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+}
+
+.c-radio:hover {
+  border-color: var(--accent);
+}
+
+.c-radio::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 0.18s var(--ease);
+}
+
+.c-radio:checked {
+  border-color: var(--accent);
+}
+
+.c-radio:checked::after {
+  transform: scale(1);
+}
+
+/* ---------- Option rows (a control wrapped in a selectable card) ---------- */
+
+.c-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.c-option:hover {
+  background: var(--surface-3);
+}
+
+/* The pale brand tint carries less punch against the dark ground than a warm
+   accent would, so the selected row takes the stronger fill — on the challenge
+   screen this is how you see which answer you picked. */
+.c-option:has(:checked) {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.c-option-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A switch row is a label, not a card — no border, full width. */
+.c-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  cursor: pointer;
   font-size: 13px;
 }
 
-.codora-card {
-  background: var(--codora-card-bg);
-  border: 1px solid var(--codora-border);
-  border-radius: var(--codora-radius);
-  padding: var(--codora-space-4);
+.c-switch-row + .c-switch-row {
+  border-top: 1px solid var(--border);
 }
 
-.codora-muted {
-  color: var(--codora-muted);
-}
+/* ---------- Selectable chip (checkbox as a pill) ---------- */
 
-.codora-btn {
-  background: var(--codora-accent);
-  color: var(--codora-accent-fg);
-  border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
+.c-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-secondary);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  user-select: none;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
 }
 
-.codora-btn:hover {
-  opacity: 0.9;
+.c-chip:hover {
+  background: var(--surface-3);
+  color: var(--fg);
 }
 
-.codora-btn-secondary {
-  background: transparent;
-  color: var(--codora-fg);
-  border: 1px solid var(--codora-border);
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
+.c-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.codora-progress-track {
+.c-chip:has(:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+
+.c-chip-dot {
+  width: 6px;
   height: 6px;
-  border-radius: 3px;
-  background: var(--codora-border);
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+
+.c-chip:has(:checked) .c-chip-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.c-chip:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A wrapping row of chips. Lives here because settings and onboarding
+   are separate bundles and both use it. */
+.set-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* ---------- Text inputs ---------- */
+
+.c-input {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+
+.c-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+.c-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+
+.c-textarea::placeholder {
+  color: var(--fg-faint);
+}
+
+.c-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+/* ---------- Progress / meters ---------- */
+
+.c-meter {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
   overflow: hidden;
 }
 
-.codora-progress-fill {
+.c-meter-fill {
   height: 100%;
-  background: var(--codora-accent);
-  border-radius: 3px;
+  border-radius: var(--r-pill);
+  background: var(--mark-grad-h);
+  transition: width 0.5s var(--ease);
+}
+
+/* ---------- Streak ---------- */
+
+/* Spacing is per-element rather than a single `gap`: the number sits tight to
+   the flame so the two read as one unit, while the label keeps a word-space.
+   The whole row wears --streak, label included. */
+.c-streak {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--streak);
+}
+
+.c-streak-value {
+  margin-left: 3px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.c-streak-label {
+  margin-left: 5px;
+}
+
+/* No streak yet: the flame goes cold rather than advertising a zero. */
+.c-streak.is-zero {
+  color: var(--fg-faint);
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes c-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.c-enter {
+  animation: c-fade-up 0.32s var(--ease) both;
+}
+
+@keyframes c-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.c-skeleton {
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  animation: c-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Segmented control ---------- */
+
+.c-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+}
+
+.c-segmented-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+
+.c-segmented-item:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.c-segmented-item.is-active {
+  background: var(--surface-3);
+  color: var(--fg);
+  box-shadow: var(--shadow-1);
+}
+
+/* ---------- Tooltip (chart hover layer) ---------- */
+
+.c-tooltip {
+  position: absolute;
+  z-index: 5;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  background: #f4f4f5;
+  color: #0d0d0f;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-pop);
+  transform: translate(-50%, -100%);
+}
+
+/* ---------- Empty state ---------- */
+
+.c-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+}
+
+.c-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--fg-faint);
 }

@@ -35,4 +35,21 @@ describe('pickPreferredModel', () => {
     const copilotAuto = { vendor: 'copilot', family: 'gpt-4o', name: 'Auto' };
     expect(pickPreferredModel([copilotAuto])).toEqual({ model: copilotAuto, isKnownAgent: false });
   });
+
+  it('prefers a concrete Copilot model over the "Auto" router', () => {
+    const auto = { vendor: 'copilot', family: 'auto', name: 'Auto' };
+    const concrete = { vendor: 'copilot', family: 'gpt-4o', name: 'GPT-4o' };
+    expect(pickPreferredModel([auto, concrete])).toEqual({ model: concrete, isKnownAgent: false });
+  });
+
+  it('still uses the router when it is the only model available', () => {
+    const auto = { vendor: 'copilot', family: 'auto', name: 'Auto' };
+    expect(pickPreferredModel([auto])).toEqual({ model: auto, isKnownAgent: false });
+  });
+
+  it('prefers a concrete agent model over an agent-named router', () => {
+    const autoAgent = { vendor: 'anthropic', family: 'claude', name: 'Auto' };
+    const concreteAgent = { vendor: 'anthropic', family: 'claude-sonnet', name: 'Claude Sonnet' };
+    expect(pickPreferredModel([autoAgent, concreteAgent])).toEqual({ model: concreteAgent, isKnownAgent: true });
+  });
 });
