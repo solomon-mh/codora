@@ -12,6 +12,7 @@ import { tryGenerateAIQuestion } from './AIQuestionGenerator';
 import type { AIProvider } from '../ai/AITypes';
 import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
+import { planAttempts } from './planAttempts';
 import { summarizeProviderError } from '../ai/summarizeProviderError';
 
 const MAX_FILE_READ_BYTES = 200_000;
@@ -67,13 +68,17 @@ export class QuestionEngine {
     // First pass avoids anything asked recently so questions vary; if that
     // yields nothing, a second pass allows a repeat rather than offering no
     // challenge at all.
-    for (const provider of options.aiProviders ?? []) {
-      const fresh = await this.tryAI(provider, candidates, categoryOrder, options, options.recentFingerprints);
+    const providers = options.aiProviders ?? [];
+    for (let i = 0; i < providers.length; i++) {
+      const fresh = await this.tryAI(providers[i], i, candidates, categoryOrder, options, options.recentFingerprints);
       if (fresh) return fresh;
     }
     if (options.recentFingerprints && options.recentFingerprints.size > 0) {
-      for (const provider of options.aiProviders ?? []) {
-        const repeat = await this.tryAI(provider, candidates, categoryOrder, options, undefined);
+      for (let i = 0; i < providers.length; i++) {
+        // Offset past the first pass so a repeat-allowed run explores
+        // combinations the first pass never reached, instead of replaying
+        // the same ones with the fingerprint filter switched off.
+        const repeat = await this.tryAI(providers[i], providers.length + i, candidates, categoryOrder, options, undefined);
         if (repeat) return repeat;
       }
     }
@@ -88,6 +93,7 @@ export class QuestionEngine {
 
   private async tryAI(
     provider: AIProvider,
+    providerIndex: number,
     candidates: CandidateFile[],
     categoryOrder: ChallengeCategory[],
     options: GenerateChallengeOptions,
@@ -97,44 +103,39 @@ export class QuestionEngine {
     let lastFailureReason: string | undefined;
     let giveUpOnProvider = false;
 
-    for (const category of categoryOrder) {
-      if (giveUpOnProvider) break;
+    for (const step of planAttempts(categoryOrder.length, candidates.length, providerIndex)) {
+      if (giveUpOnProvider || attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) break;
+
+      const category = categoryOrder[step.categoryIndex];
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
-      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+      const type = types[step.round % types.length];
+      const candidate = candidates[step.candidateIndex];
 
-      for (const type of types) {
-        if (giveUpOnProvider) break;
-        for (const candidate of candidates) {
-          if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
-            continue;
-          }
-          if (attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) {
-            this.reportAIFailure(provider, lastFailureReason, options);
-            return undefined;
-          }
-          attempts++;
-
-          const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
-          const aiQuestion = await tryGenerateAIQuestion(
-            provider,
-            category,
-            type,
-            difficulty,
-            candidate,
-            isRetentionCheck,
-            (reason, retryable) => {
-              lastFailureReason = reason;
-              // A bad key / exhausted quota / retired model fails
-              // identically every time, and on a metered key each retry
-              // burns quota for nothing — stop this provider immediately.
-              if (!retryable) giveUpOnProvider = true;
-            },
-          );
-          if (aiQuestion) return aiQuestion;
-          if (giveUpOnProvider) break;
-        }
+      if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
+        continue;
       }
+      attempts++;
+
+      const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
+      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+      const aiQuestion = await tryGenerateAIQuestion(
+        provider,
+        category,
+        type,
+        difficulty,
+        candidate,
+        isRetentionCheck,
+        (reason, retryable) => {
+          lastFailureReason = reason;
+          // A bad key / exhausted quota / retired model fails
+          // identically every time, and on a metered key each retry
+          // burns quota for nothing — stop this provider immediately.
+          if (!retryable) giveUpOnProvider = true;
+        },
+      );
+      if (aiQuestion) return aiQuestion;
     }
+
     if (attempts > 0) this.reportAIFailure(provider, lastFailureReason, options);
     return undefined;
   }

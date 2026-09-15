@@ -20,6 +20,24 @@ export interface AIGeneratedQuestionPayload {
   reason?: string;
 }
 
+/**
+ * What one generation attempt produced.
+ *
+ * 'declined' and 'unusable' are kept apart because they mean opposite
+ * things about the provider. A decline is the model doing exactly what the
+ * generation prompt asks — "if the code shown genuinely does not support a
+ * confident question of this type, respond with {\"skip\": true}" — and
+ * says the *snippet and question type* were a bad pairing, not that
+ * anything is wrong with the provider. 'unusable' is empty or malformed
+ * output, which is a genuine provider problem. Collapsing both into
+ * `undefined` made a well-behaved model get reported to the user as
+ * returning a response that "didn't match the expected format".
+ */
+export type AIGenerationResult =
+  | { outcome: 'question'; payload: AIGeneratedQuestionPayload }
+  | { outcome: 'declined' }
+  | { outcome: 'unusable' };
+
 export interface AIEvaluationContext {
   questionPrompt: string;
   codeSnippet: string;
@@ -56,7 +74,7 @@ export interface AIProvider {
   readonly vendor: AIVendor;
   /** The concrete model in play, e.g. 'Claude Sonnet 5'. Stored on every question this provider writes. */
   readonly modelName: string;
-  generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined>;
+  generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;
   /**
    * A truncated preview of the most recent raw model response — only

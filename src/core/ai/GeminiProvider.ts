@@ -5,7 +5,7 @@ import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
-  AIGeneratedQuestionPayload,
+  AIGenerationResult,
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
@@ -30,11 +30,11 @@ export class GeminiProvider extends BaseAIProvider implements AIProvider {
     this.client = new GoogleGenAI({ apiKey });
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
+  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
     this.recordRawResponse(text);
-    if (!text) return undefined;
+    if (!text) return { outcome: 'unusable' };
     return validateGenerationPayload(extractJsonObject(text));
   }
 

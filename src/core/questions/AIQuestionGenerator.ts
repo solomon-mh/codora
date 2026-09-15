@@ -46,9 +46,9 @@ export async function tryGenerateAIQuestion(
   const codeSnippet = (candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim();
   if (!codeSnippet) return undefined;
 
-  let payload;
+  let result;
   try {
-    payload = await provider.generateQuestion({
+    result = await provider.generateQuestion({
       category,
       questionType,
       difficulty,
@@ -70,7 +70,26 @@ export async function tryGenerateAIQuestion(
     onFailure?.(reason, retryable);
     return undefined;
   }
-  if (!payload) {
+  // The model reading the snippet and judging it a poor fit for this
+  // question type is the prompt working as designed, not a fault. Saying so
+  // plainly matters: reported as a format error, a well-behaved model looks
+  // broken, and the real signal — that this pairing of snippet and question
+  // type was a dead end — is lost.
+  if (result.outcome === 'declined') {
+    getLogger().info('AI provider declined to ask about this snippet', {
+      provider: provider.id,
+      category,
+      questionType,
+      file: candidate.file.relativePath,
+    });
+    onFailure?.(
+      `it judged ${candidate.file.relativePath} unsuitable for a ${questionType} question and declined to ask one`,
+      true,
+    );
+    return undefined;
+  }
+
+  if (result.outcome === 'unusable') {
     const preview = provider.getLastRawResponsePreview();
     getLogger().warn('AI question generation returned no usable payload', { provider: provider.id, preview });
     // A different code snippet may well produce a valid question, so this
@@ -83,6 +102,8 @@ export async function tryGenerateAIQuestion(
     );
     return undefined;
   }
+
+  const payload = result.payload;
 
   const body: QuestionBody =
     payload.kind === 'multiple-choice'

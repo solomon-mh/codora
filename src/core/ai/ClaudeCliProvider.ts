@@ -8,7 +8,7 @@ import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
   AIEvaluationPayload,
-  AIGeneratedQuestionPayload,
+  AIGenerationResult,
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
@@ -74,11 +74,11 @@ export class ClaudeCliProvider extends BaseAIProvider implements AIProvider {
     return cliPath ? new ClaudeCliProvider(cliPath) : undefined;
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined> {
+  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
     const { system, user } = buildGenerationPrompt(ctx);
     const text = await this.send(system, user);
     this.recordRawResponse(text);
-    if (!text) return undefined;
+    if (!text) return { outcome: 'unusable' };
     return validateGenerationPayload(extractJsonObject(text));
   }
 
@@ -99,7 +99,7 @@ export class ClaudeCliProvider extends BaseAIProvider implements AIProvider {
     const args = ['--print', `${system}\n\n${user}`, '--disallowed-tools', ...DENIED_TOOLS];
 
     return new Promise((resolve, reject) => {
-      execFile(
+      const child = execFile(
         this.cliPath,
         args,
         { cwd: os.tmpdir(), timeout: REQUEST_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
@@ -114,6 +114,13 @@ export class ClaudeCliProvider extends BaseAIProvider implements AIProvider {
           resolve(stdout.trim());
         },
       );
+
+      // The whole prompt goes in argv, so there is nothing to send on stdin
+      // — but execFile still opens it as a pipe, and the CLI waits three
+      // seconds for input before giving up on it ("no stdin data received
+      // in 3s"). Closing it immediately drops three seconds from every
+      // single call.
+      child.stdin?.end();
     });
   }
 }
