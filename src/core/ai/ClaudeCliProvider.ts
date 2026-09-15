@@ -57,6 +57,13 @@ let cachedCliPath: string | undefined;
 export class ClaudeCliProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'claude-cli' as const;
   readonly label = 'Claude Code CLI';
+  readonly vendor = 'anthropic' as const;
+  /**
+   * The CLI picks the model itself from the developer's own Claude
+   * configuration and print mode doesn't report which one it used, so this
+   * names the tool rather than claiming a specific model.
+   */
+  readonly modelName = 'Claude Code';
 
   constructor(private readonly cliPath: string) {
     super();

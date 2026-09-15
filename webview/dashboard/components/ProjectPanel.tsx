@@ -1,5 +1,5 @@
 import type { DashboardState } from '../../shared/messages';
-import { IconAlert, IconCheck, IconCube, IconSpark } from '../../shared/Icons';
+import { IconAlert, IconChallenge, IconCheck, IconCube } from '../../shared/Icons';
 import { BreakdownBars } from './BreakdownBars';
 
 export function ProjectPanel({ project }: { project: DashboardState['project'] }): JSX.Element {
@@ -18,7 +18,7 @@ export function ProjectPanel({ project }: { project: DashboardState['project'] }
         </div>
         <div className="stat">
           <div className="stat-label">
-            <IconSpark size={13} />
+            <IconChallenge size={13} />
             Challenges
           </div>
           <div className="stat-value">{project.challenges}</div>
@@ -68,7 +68,7 @@ export function ProjectPanel({ project }: { project: DashboardState['project'] }
           {noSignal ? (
             <div className="c-empty">
               <span className="c-empty-icon">
-                <IconSpark size={18} />
+                <IconChallenge size={18} />
               </span>
               Keep coding. Codora needs a little more activity before it can tell your
               strengths from your weak spots.

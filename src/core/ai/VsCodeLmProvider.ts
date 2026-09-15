@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
 import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
 import { pickPreferredModel } from './pickPreferredModel';
+import { inferVendor } from './AIIdentity';
 import { BaseAIProvider } from './BaseAIProvider';
 import type {
   AIEvaluationContext,
@@ -10,6 +11,7 @@ import type {
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import type { AIVendor } from './AIIdentity';
 import { getLogger } from '../../utils/logger';
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -29,6 +31,8 @@ const REQUEST_TIMEOUT_MS = 20_000;
 export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'vscode-lm' as const;
   readonly label: string;
+  readonly vendor: AIVendor;
+  readonly modelName: string;
   /** False for a generic/router match (e.g. Copilot's "Auto") — see AIProviderResolver, which tries a manually configured key first in that case. */
   readonly isKnownAgent: boolean;
 
@@ -36,6 +40,11 @@ export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
     super();
     this.isKnownAgent = isKnownAgent;
     this.label = `VS Code Language Model (${model.name})`;
+    // `name` is the display name the publishing extension chose, so it's
+    // the one string here guaranteed to mean something to the developer —
+    // `family`/`id` are often internal slugs.
+    this.vendor = inferVendor(model.vendor, model.family, model.name);
+    this.modelName = model.name;
   }
 
   static async resolve(): Promise<VsCodeLmProvider | undefined> {

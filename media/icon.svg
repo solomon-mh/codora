@@ -1,24 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
   <!--
-    Codora's mark: a spark of understanding held inside code braces.
+    Codora's mark: the core of understanding, held inside code braces.
 
-    Braces read unambiguously as "code" at any size, and the spark carries
-    the comprehension/"aura" idea (matching the ✨ used for AI-generated
-    questions in the challenge UI). Everything is currentColor so VS Code
-    can recolor it for active/inactive activity-bar states.
+    Braces read unambiguously as "code" at any size, and the core is the
+    same core IconAura draws in the webview (webview/shared/Icons.tsx) —
+    this is that mark's compressed form, with the two aura bands dropped
+    because there is no room for them here (see below).
+
+    What used to sit here was a four-pointed spark, which has become the
+    universal "an AI made this" glyph — exactly the wrong claim for a tool
+    whose whole point is that *you* understand the code, and mute besides,
+    since a spark says nothing about aura.
 
     Shape choices were made by rendering candidates at the sizes the
     activity bar actually uses (16/24px), not by eye at full size:
-    - Strokes for the braces, one solid shape for the spark: at 16px a
-      thinner spark turns to mush and a second small sparkle (the usual
-      "AI" motif) collides with the right brace into noise.
-    - The spark is taller than wide and deliberately kept clear of the
-      brace pinch — a wider one merges with the braces into a single blob
-      once antialiased down to 16px.
+    - One solid core, not a core inside a ring. The braces' narrowest
+      clearance is not at mid-height (where they bow out to x=4.6/19.4)
+      but at y≈9 and y≈15, where they close to x=7.4/16.6. Any ring wide
+      enough to be visible around the core crosses that pinch and
+      antialiases into a blob at 16px; a ring tight enough to clear it
+      closes the gap to the core instead.
+    - Radius 2.8 keeps the core clear of the pinch entirely (it tops out
+      at y=9.2) while still holding its shape at 16px.
   -->
   <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M9.2 4.2C7.4 4.2 7.4 5.6 7.4 7.2 7.4 9.2 6.1 10.9 4.6 12 6.1 13.1 7.4 14.8 7.4 16.8 7.4 18.4 7.4 19.8 9.2 19.8" />
     <path d="M14.8 4.2C16.6 4.2 16.6 5.6 16.6 7.2 16.6 9.2 17.9 10.9 19.4 12 17.9 13.1 16.6 14.8 16.6 16.8 16.6 18.4 16.6 19.8 14.8 19.8" />
   </g>
-  <path fill="currentColor" d="M12 7.1 13.35 10.65 15.8 12 13.35 13.35 12 16.9 10.65 13.35 8.2 12 10.65 10.65Z" />
+  <circle cx="12" cy="12" r="2.8" fill="currentColor" />
 </svg>

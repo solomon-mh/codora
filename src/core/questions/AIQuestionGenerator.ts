@@ -97,6 +97,7 @@ export async function tryGenerateAIQuestion(
     prompt: payload.prompt,
     body,
     generatedBy: 'ai',
+    generator: { providerId: provider.id, vendor: provider.vendor, modelName: provider.modelName },
     provenance: {
       sourceFiles: [candidate.file.relativePath],
       sourceType: 'git-diff',

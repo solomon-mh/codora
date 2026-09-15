@@ -1,3 +1,4 @@
+import type { AIModelIdentity } from '../ai/AIIdentity';
 import type { ScoreCategory } from '../scoring/ScoreTypes';
 
 /** The 8 question types from spec section 12 (A-H). */
@@ -113,6 +114,12 @@ export interface GeneratedQuestion {
    * correctly.
    */
   generatedBy?: 'ai' | 'deterministic';
+  /**
+   * Which model wrote this question. Absent on questions stored before
+   * Codora recorded it (and on the retired deterministic templates), which
+   * the UI shows as an unattributed model rather than inventing a name.
+   */
+  generator?: AIModelIdentity;
 }
 
 export interface ChallengeAnswer {

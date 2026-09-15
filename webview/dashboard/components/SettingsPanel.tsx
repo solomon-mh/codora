@@ -8,8 +8,8 @@ import {
   IconGauge,
   IconKey,
   IconLayers,
+  IconPlug,
   IconShield,
-  IconSpark,
   IconTrash,
 } from '../../shared/Icons';
 import type { IconProps } from '../../shared/Icons';
@@ -129,7 +129,7 @@ export function SettingsPanel({
         />
       </Group>
 
-      <Group icon={IconSpark} title="AI-assisted challenges">
+      <Group icon={IconPlug} title="AI-assisted challenges">
         <SwitchRow
           label="Use an AI model"
           description="Richer questions from your code, and free-text answers get evaluated."

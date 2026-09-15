@@ -7,12 +7,12 @@ import type {
   SidebarToExtensionMessage,
 } from '../shared/messages';
 import {
+  IconAura,
   IconClock,
   IconCube,
   IconFlame,
   IconGrid,
   IconPlay,
-  IconSpark,
 } from '../shared/Icons';
 
 const vscode = getVsCodeApi<SidebarToExtensionMessage>();
@@ -43,7 +43,7 @@ export function App(): JSX.Element {
     <div className="side c-enter">
       <div className="side-brand">
         <span className="side-brand-mark">
-          <IconSpark size={13} strokeWidth={1.8} />
+          <IconAura size={13} strokeWidth={1.8} />
         </span>
         <span className="side-brand-name">Codora</span>
       </div>

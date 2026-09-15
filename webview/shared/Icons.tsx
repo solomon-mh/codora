@@ -75,10 +75,47 @@ export const IconSliders = (p: IconProps): JSX.Element => (
   </Svg>
 );
 
-export const IconSpark = (p: IconProps): JSX.Element => (
+/**
+ * Codora's mark: a core of understanding with two aura bands sweeping
+ * around it. Deliberately not a four-pointed sparkle — that glyph now
+ * means "some AI did this" everywhere, which is the opposite of what
+ * Codora is about, and it says nothing about aura. The two bands are set
+ * at opposing angles rather than mirrored, so the mark reads as motion
+ * around the core instead of as a pair of parentheses.
+ *
+ * The bands sit far outside the core (radius 6.6 against a 2.4 core) so
+ * the gap survives at the 13px the sidebar and panel headers use.
+ */
+export const IconAura = (p: IconProps): JSX.Element => (
   <Svg {...p}>
-    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
-    <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    <path d="M18.2 9.74A6.6 6.6 0 0 0 6.94 7.76" />
+    <path d="M5.8 14.26a6.6 6.6 0 0 0 11.26 1.98" />
+    <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+  </Svg>
+);
+
+/** A challenge: one question posed about a piece of code. */
+export const IconChallenge = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+    <path d="M9.6 9.6a2.6 2.6 0 0 1 5.05.9c0 1.7-2.6 2.6-2.6 2.6" />
+    <path d="M12 17.2v.01" />
+  </Svg>
+);
+
+/** A model Codora borrows from the editor rather than calling itself. */
+export const IconPlug = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <path d="M9 3v5M15 3v5" />
+    <path d="M6.5 8h11v2.6a5.5 5.5 0 0 1-11 0z" />
+    <path d="M12 16.1V21" />
+  </Svg>
+);
+
+/** A model reached over the network with the developer's own API key. */
+export const IconCloud = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
   </Svg>
 );
 

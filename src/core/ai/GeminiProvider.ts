@@ -9,6 +9,7 @@ import type {
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import { GEMINI_MODEL_NAMES } from './modelDisplayName';
 import type { GeminiModel } from '../storage/StorageSchema';
 
 /**
@@ -19,10 +20,13 @@ import type { GeminiModel } from '../storage/StorageSchema';
 export class GeminiProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'gemini' as const;
   readonly label = 'Gemini API';
+  readonly vendor = 'google' as const;
+  readonly modelName: string;
   private readonly client: GoogleGenAI;
 
   constructor(apiKey: string, private readonly model: GeminiModel) {
     super();
+    this.modelName = GEMINI_MODEL_NAMES[model];
     this.client = new GoogleGenAI({ apiKey });
   }
 

@@ -9,6 +9,7 @@ import type {
   AIProvider,
   AIQuestionContext,
 } from './AITypes';
+import { OPENAI_MODEL_NAMES } from './modelDisplayName';
 import type { OpenAIModel } from '../storage/StorageSchema';
 
 const MAX_COMPLETION_TOKENS = 1024;
@@ -22,10 +23,13 @@ const MAX_COMPLETION_TOKENS = 1024;
 export class OpenAIProvider extends BaseAIProvider implements AIProvider {
   readonly id = 'openai' as const;
   readonly label = 'OpenAI API';
+  readonly vendor = 'openai' as const;
+  readonly modelName: string;
   private readonly client: OpenAI;
 
   constructor(apiKey: string, private readonly model: OpenAIModel) {
     super();
+    this.modelName = OPENAI_MODEL_NAMES[model];
     this.client = new OpenAI({ apiKey });
   }
 

@@ -1,3 +1,4 @@
+import type { AIProviderId, AIVendor } from './AIIdentity';
 import type { ChallengeCategory, Difficulty, QuestionType } from '../questions/QuestionTypes';
 
 export interface AIQuestionContext {
@@ -49,8 +50,12 @@ export interface AIEvaluationPayload {
  * local-template fallback), while answer scoring degrades locally.
  */
 export interface AIProvider {
-  readonly id: 'claude-cli' | 'vscode-lm' | 'anthropic' | 'openai' | 'gemini';
+  readonly id: AIProviderId;
   readonly label: string;
+  /** Who makes the model behind this provider — the UI names it rather than saying "AI". */
+  readonly vendor: AIVendor;
+  /** The concrete model in play, e.g. 'Claude Sonnet 5'. Stored on every question this provider writes. */
+  readonly modelName: string;
   generateQuestion(ctx: AIQuestionContext): Promise<AIGeneratedQuestionPayload | undefined>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;
   /**

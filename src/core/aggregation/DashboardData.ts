@@ -166,6 +166,7 @@ function buildHistory(project: ProjectData, now: number): HistoryItem[] {
       strengths: c.evaluation.strengths,
       gaps: c.evaluation.gaps,
       generatedBy: c.question.generatedBy ?? 'deterministic',
+      generator: c.question.generator,
     }));
 }
 

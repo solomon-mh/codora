@@ -1,4 +1,5 @@
 import type { GeneratedQuestion, ChallengeAnswer } from '../../src/core/questions/QuestionTypes';
+import type { AIModelIdentity } from '../../src/core/ai/AIIdentity';
 import type { EvaluationResult, ScoreCategory } from '../../src/core/scoring/ScoreTypes';
 import type { CodoraSettings } from '../../src/core/storage/StorageSchema';
 import type { AIStatus } from '../../src/core/ai/AIProviderResolver';
@@ -24,6 +25,8 @@ export interface HistoryItem {
   strengths: string[];
   gaps: string[];
   generatedBy: 'ai' | 'deterministic';
+  /** Which model wrote the question — absent on records stored before Codora tracked it. */
+  generator?: AIModelIdentity;
 }
 
 export interface BadgeItem {

@@ -12,16 +12,17 @@ import type { EvaluationResult } from '../../src/core/scoring/ScoreTypes';
 import {
   IconAlert,
   IconArrowRight,
+  IconAura,
   IconBulb,
   IconCheck,
   IconCheckCircle,
-  IconFile,
   IconKey,
+  IconPlug,
   IconRefresh,
-  IconSpark,
   IconTarget,
   IconTerminal,
 } from '../shared/Icons';
+import { ModelBadge } from '../shared/ModelBadge';
 
 const vscode = getVsCodeApi<ChallengeToExtensionMessage>();
 
@@ -110,9 +111,6 @@ export function App(): JSX.Element {
 
   const canSubmit =
     question.body.kind === 'multiple-choice' ? !!selectedOption : freeText.trim().length > 0;
-  // Only history records stored before local templates were removed say
-  // 'deterministic', so an unset value on a live question means AI.
-  const byAI = question.generatedBy !== 'deterministic';
 
   return (
     <div className="chal c-enter">
@@ -121,17 +119,7 @@ export function App(): JSX.Element {
           <>
             <span className="c-pill" style={{ textTransform: 'capitalize' }}>{question.category}</span>
             <span className="c-pill" style={{ textTransform: 'capitalize' }}>{question.difficulty}</span>
-            <span
-              className={byAI ? 'c-pill c-pill-accent' : 'c-pill'}
-              title={
-                byAI
-                  ? 'Written by an AI model from your code'
-                  : 'Written by a local deterministic template — no AI involved'
-              }
-            >
-              {byAI ? <IconSpark size={10} /> : <IconFile size={10} />}
-              {byAI ? 'AI' : 'Template'}
-            </span>
+            <ModelBadge generator={question.generator} generatedBy={question.generatedBy} />
           </>
         }
       />
@@ -198,7 +186,7 @@ function Header({ meta }: { meta?: ReactNode }): JSX.Element {
   return (
     <div className="chal-head">
       <span className="chal-mark">
-        <IconSpark size={14} strokeWidth={1.8} />
+        <IconAura size={14} strokeWidth={1.8} />
       </span>
       <span className="chal-head-name">Codora Challenge</span>
       {meta && <span className="chal-head-meta">{meta}</span>}
@@ -281,7 +269,7 @@ function UnavailableView({ state }: { state: ChallengeUnavailable }): JSX.Elemen
 }
 
 function setupIcon(option: ChallengeSetupOption): JSX.Element {
-  if (option.kind === 'setup-vscode-lm') return <IconSpark size={14} />;
+  if (option.kind === 'setup-vscode-lm') return <IconPlug size={14} />;
   if (option.kind === 'show-logs') return <IconTerminal size={14} />;
   return <IconKey size={14} />;
 }

@@ -6,13 +6,13 @@ import type {
   ExtensionToDashboardMessage,
 } from '../shared/messages';
 import {
+  IconAura,
   IconCube,
   IconFlame,
   IconGrid,
   IconHistory,
   IconPlay,
   IconSliders,
-  IconSpark,
 } from '../shared/Icons';
 import type { IconProps } from '../shared/Icons';
 import { AuraCard } from './components/AuraCard';
@@ -64,7 +64,7 @@ export function App(): JSX.Element {
       <aside className="dash-rail">
         <div className="dash-brand">
           <span className="dash-brand-mark">
-            <IconSpark size={17} strokeWidth={1.8} />
+            <IconAura size={17} strokeWidth={1.8} />
           </span>
           <span className="dash-brand-name">Codora</span>
         </div>
@@ -202,7 +202,7 @@ function LoadingShell(): JSX.Element {
       <aside className="dash-rail">
         <div className="dash-brand">
           <span className="dash-brand-mark">
-            <IconSpark size={17} strokeWidth={1.8} />
+            <IconAura size={17} strokeWidth={1.8} />
           </span>
           <span className="dash-brand-name">Codora</span>
         </div>

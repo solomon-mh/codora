@@ -5,9 +5,9 @@ import {
   IconChevronDown,
   IconFile,
   IconHistory,
-  IconSpark,
   IconXCircle,
 } from '../../shared/Icons';
+import { ModelBadge } from '../../shared/ModelBadge';
 
 export function HistoryPanel({ history }: { history: HistoryItem[] }): JSX.Element {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -55,12 +55,7 @@ export function HistoryPanel({ history }: { history: HistoryItem[] }): JSX.Eleme
                   </span>
                   <span className="c-pill" style={{ textTransform: 'capitalize' }}>{item.category}</span>
                   <span className="c-pill" style={{ textTransform: 'capitalize' }}>{item.difficulty}</span>
-                  {item.generatedBy === 'ai' && (
-                    <span className="c-pill c-pill-accent">
-                      <IconSpark size={10} />
-                      AI
-                    </span>
-                  )}
+                  {item.generatedBy === 'ai' && <ModelBadge generator={item.generator} />}
                   <span className="c-muted" style={{ fontSize: 11, marginLeft: 'auto' }}>
                     {item.timestampLabel}
                   </span>

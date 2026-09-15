@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { DashboardState } from '../../shared/messages';
-import { IconCheckCircle, IconFlame, IconGauge, IconSpark, IconTerminal } from '../../shared/Icons';
+import { IconChallenge, IconCheckCircle, IconFlame, IconGauge, IconTerminal } from '../../shared/Icons';
 import type { IconProps } from '../../shared/Icons';
 
 /** Monday = 0, matching the order DashboardData builds the weekly series in. */
@@ -12,7 +12,7 @@ export function WeekPanel({ thisWeek }: { thisWeek: DashboardState['thisWeek'] }
       <div className="dash-stats dash-section">
         <Stat
           label="Challenges"
-          Icon={IconSpark}
+          Icon={IconChallenge}
           value={thisWeek.challengesCompleted}
           foot="answered this week"
         />

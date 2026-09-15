@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type { OnboardingToExtensionMessage } from '../shared/messages';
 import { Chip, RadioOption } from '../shared/Controls';
-import { IconArrowRight, IconClock, IconLayers, IconShield, IconSpark } from '../shared/Icons';
+import { IconArrowRight, IconAura, IconCheck, IconClock, IconLayers, IconShield } from '../shared/Icons';
 
 const vscode = getVsCodeApi<OnboardingToExtensionMessage>();
 
@@ -32,7 +32,7 @@ export function App(): JSX.Element {
   return (
     <div className="onb c-enter">
       <div className="onb-mark">
-        <IconSpark size={24} strokeWidth={1.7} />
+        <IconAura size={24} strokeWidth={1.7} />
       </div>
 
       <h1 className="onb-title">Codora</h1>
@@ -41,7 +41,7 @@ export function App(): JSX.Element {
         understanding of the code you're building.
       </p>
       <div className="onb-claim">
-        <IconSpark size={14} />
+        <IconCheck size={14} />
         AI is allowed. Not understanding your code isn't.
       </div>
 
