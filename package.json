@@ -70,6 +70,10 @@
       {
         "command": "codora.configureAI",
         "title": "Codora: Configure AI Provider"
+      },
+      {
+        "command": "codora.showOutput",
+        "title": "Codora: Show Logs"
       }
     ],
     "configuration": {

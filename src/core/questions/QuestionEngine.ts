@@ -4,27 +4,20 @@ import * as path from 'path';
 import { analyzeGit } from '../context/GitAnalyzer';
 import { findRecentlyModifiedFiles } from '../context/WorkspaceAnalyzer';
 import { extractFunctions, findFunctionTouchedByLines, parseChangedLines } from '../context/CodeContextExtractor';
-import { generateQuestion, ALL_QUESTION_TYPES, type FileContext, type TemplateContext } from './QuestionGenerator';
-import type { ChallengeCategory, GeneratedQuestion } from './QuestionTypes';
-import { QUESTION_TYPE_TO_CATEGORY } from './QuestionTypes';
+import type { ChallengeCategory, FileContext, GeneratedQuestion } from './QuestionTypes';
+import { ALL_QUESTION_TYPES, QUESTION_TYPE_TO_CATEGORY } from './QuestionTypes';
 import type { RollingScoreMap, ScoreCategory } from '../scoring/ScoreTypes';
 import { getLogger } from '../../utils/logger';
 import { tryGenerateAIQuestion } from './AIQuestionGenerator';
 import type { AIProvider } from '../ai/AITypes';
 import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
+import { planAttempts } from './planAttempts';
+import { summarizeProviderError } from '../ai/summarizeProviderError';
 
 const MAX_FILE_READ_BYTES = 200_000;
-/** Real AI calls attempted per provider, per challenge, before moving to the next provider (or, if none are left, to deterministic templates) — bounded so a misconfigured/failing provider doesn't turn every challenge into dozens of sequential failed requests. */
+/** Real AI calls attempted per provider, per challenge, before moving to the next provider — bounded so a failing provider doesn't turn every challenge into dozens of sequential requests. A non-retryable error (bad key, exhausted quota, retired model) stops that provider immediately, well before this cap. */
 const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
-/**
- * Shown once per *provider* per session — keyed by provider id, not a
- * single global flag — so switching from a failing provider to a newly
- * configured one always surfaces fresh diagnostic info instead of going
- * silent because something else already tripped the warning. Full detail
- * always goes to the Codora output channel regardless of this cap.
- */
-const warnedAIFailureProviders = new Set<string>();
 
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
@@ -33,13 +26,17 @@ export interface GenerateChallengeOptions {
   staleSubjectFiles: Set<string>;
   /**
    * Tried in order — each gets its own bounded attempt budget
-   * (MAX_AI_ATTEMPTS_PER_PROVIDER) across different categories/files before
-   * moving to the next candidate. Deterministic templates only run once
-   * every candidate here has been exhausted.
+   * (MAX_AI_ATTEMPTS_PER_PROVIDER) across different categories/files
+   * before moving to the next candidate. If none of them produces a
+   * question, no challenge is offered at all: there is deliberately no
+   * local-template fallback, so a challenge is always genuinely grounded
+   * in a model's reading of the code rather than a canned phrasing.
    */
   aiProviders?: AIProvider[];
   /** Fingerprints of recently-asked (type, file, function) combos — avoided on a first pass so the same question doesn't repeat while other candidates exist. */
   recentFingerprints?: Set<string>;
+  /** Called once per provider that couldn't produce a question, so the caller can report the real reason in the UI instead of guessing at it. */
+  onProviderFailure?: (providerLabel: string, reason: string | undefined) => void;
 }
 
 interface CandidateFile {
@@ -62,36 +59,41 @@ export class QuestionEngine {
 
     const categoryOrder = weightedCategoryOrder(options.enabledCategories, options.categoryScores);
 
-    // Every configured AI provider gets a real, multi-attempt chance
-    // across different categories/files before deterministic templates
-    // are touched at all — deterministic is the last resort, not a
-    // same-combo fallback for the first thing the first provider failed
-    // on. A VS Code Language Model can resolve successfully (a model
-    // handle exists) while still never producing usable output, so a
-    // manually configured key must still get its own real chance.
-    for (const provider of options.aiProviders ?? []) {
-      const aiQuestion = await this.tryAI(provider, candidates, categoryOrder, options, options.recentFingerprints);
-      if (aiQuestion) return aiQuestion;
+    // Each configured provider gets a real, multi-attempt chance across
+    // different categories/files before moving to the next one — a VS Code
+    // Language Model can resolve successfully (a model handle exists) while
+    // still never producing usable output, so a manually configured key
+    // must still get its own real chance.
+    //
+    // First pass avoids anything asked recently so questions vary; if that
+    // yields nothing, a second pass allows a repeat rather than offering no
+    // challenge at all.
+    const providers = options.aiProviders ?? [];
+    for (let i = 0; i < providers.length; i++) {
+      const fresh = await this.tryAI(providers[i], i, candidates, categoryOrder, options, options.recentFingerprints);
+      if (fresh) return fresh;
     }
-
-    // Deterministic first pass avoids repeating anything asked recently, so
-    // variety comes from trying other categories/types/files first. If
-    // that leaves nothing (e.g. only one file/function is actually being
-    // worked on), a second pass allows repeats rather than silently
-    // skipping the challenge — a repeat is better than nothing firing.
-    const firstPass = await this.tryDeterministic(candidates, categoryOrder, options, options.recentFingerprints);
-    if (firstPass) return firstPass;
     if (options.recentFingerprints && options.recentFingerprints.size > 0) {
-      const secondPass = await this.tryDeterministic(candidates, categoryOrder, options, undefined);
-      if (secondPass) return secondPass;
+      for (let i = 0; i < providers.length; i++) {
+        // Offset past the first pass so a repeat-allowed run explores
+        // combinations the first pass never reached, instead of replaying
+        // the same ones with the fingerprint filter switched off.
+        const repeat = await this.tryAI(providers[i], providers.length + i, candidates, categoryOrder, options, undefined);
+        if (repeat) return repeat;
+      }
     }
 
-    getLogger().info('No template produced a confident question — skipping challenge');
+    // Deliberately no local-template fallback: a challenge should always be
+    // a model's actual reading of this code, not a canned phrasing dressed
+    // up as comprehension. If no provider can produce one, no challenge is
+    // offered and the caller explains why.
+    getLogger().info('No AI provider produced a question — no challenge will be offered');
     return undefined;
   }
 
   private async tryAI(
     provider: AIProvider,
+    providerIndex: number,
     candidates: CandidateFile[],
     categoryOrder: ChallengeCategory[],
     options: GenerateChallengeOptions,
@@ -99,94 +101,62 @@ export class QuestionEngine {
   ): Promise<GeneratedQuestion | undefined> {
     let attempts = 0;
     let lastFailureReason: string | undefined;
+    let giveUpOnProvider = false;
 
-    for (const category of categoryOrder) {
+    for (const step of planAttempts(categoryOrder.length, candidates.length, providerIndex)) {
+      if (giveUpOnProvider || attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) break;
+
+      const category = categoryOrder[step.categoryIndex];
       const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
-      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+      const type = types[step.round % types.length];
+      const candidate = candidates[step.candidateIndex];
 
-      for (const type of types) {
-        for (const candidate of candidates) {
-          if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
-            continue;
-          }
-          if (attempts >= MAX_AI_ATTEMPTS_PER_PROVIDER) {
-            this.reportAIFailure(provider, lastFailureReason);
-            return undefined;
-          }
-          attempts++;
-
-          const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
-          const aiQuestion = await tryGenerateAIQuestion(
-            provider,
-            category,
-            type,
-            difficulty,
-            candidate,
-            isRetentionCheck,
-            (reason) => {
-              lastFailureReason = reason;
-            },
-          );
-          if (aiQuestion) return aiQuestion;
-        }
+      if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
+        continue;
       }
+      attempts++;
+
+      const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
+      const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
+      const aiQuestion = await tryGenerateAIQuestion(
+        provider,
+        category,
+        type,
+        difficulty,
+        candidate,
+        isRetentionCheck,
+        (reason, retryable) => {
+          lastFailureReason = reason;
+          // A bad key / exhausted quota / retired model fails
+          // identically every time, and on a metered key each retry
+          // burns quota for nothing — stop this provider immediately.
+          if (!retryable) giveUpOnProvider = true;
+        },
+      );
+      if (aiQuestion) return aiQuestion;
     }
-    if (attempts > 0) this.reportAIFailure(provider, lastFailureReason);
+
+    if (attempts > 0) this.reportAIFailure(provider, lastFailureReason, options);
     return undefined;
   }
 
   /**
-   * Surfaces an actual AI failure reason to the user instead of letting it
-   * disappear into "why is this always a local template" confusion —
-   * shown once per *provider id* per session (full detail always goes to
-   * the Codora output channel via the warn-level logs in each provider's
-   * caller) so a misconfigured key doesn't nag on every single challenge,
-   * while a newly tried provider still always gets its own fresh warning.
+   * Records why a provider couldn't produce a question, and hands the
+   * reason to the caller so it can be shown in the challenge panel itself
+   * rather than only as a toast the user can miss.
    */
-  private reportAIFailure(provider: AIProvider, reason: string | undefined): void {
-    const providerLabel = provider.label;
-    getLogger().warn('AI did not produce a usable question after several attempts — trying next provider or falling back to local templates', {
-      provider: providerLabel,
-      reason,
-    });
-    if (warnedAIFailureProviders.has(provider.id)) return;
-    warnedAIFailureProviders.add(provider.id);
-    const detail = reason ? ` (${reason})` : '';
-    void vscode.window.showWarningMessage(
-      `Codora: AI question generation failed via ${providerLabel}${detail} — trying the next configured option. See the "Codora" output channel for details.`,
-    );
-  }
-
-  private async tryDeterministic(
-    candidates: CandidateFile[],
-    categoryOrder: ChallengeCategory[],
+  private reportAIFailure(
+    provider: AIProvider,
+    reason: string | undefined,
     options: GenerateChallengeOptions,
-    skipFingerprints: Set<string> | undefined,
-  ): Promise<GeneratedQuestion | undefined> {
-    for (const category of categoryOrder) {
-      const types = ALL_QUESTION_TYPES.filter((t) => QUESTION_TYPE_TO_CATEGORY[t] === category);
-
-      for (const type of types) {
-        for (const candidate of candidates) {
-          if (skipFingerprints?.has(questionFingerprint(type, candidate.file.relativePath, candidate.fn?.name))) {
-            continue;
-          }
-
-          const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
-          const ctx: TemplateContext = {
-            file: candidate.file,
-            fn: candidate.fn,
-            testFile: candidate.testFile,
-            commitMessage: candidate.commitMessage,
-            now: Date.now(),
-            isRetentionCheck,
-          };
-          const question = generateQuestion(type, ctx);
-          if (question) return question;
-        }
-      }
-    }
-    return undefined;
+  ): void {
+    // Summarized here too: the per-attempt log above already recorded this,
+    // and repeating a 1.5KB JSON error verbatim made the channel unreadable.
+    getLogger().warn('AI provider could not produce a usable question', {
+      provider: provider.label,
+      reason: summarizeProviderError(reason),
+    });
+    options.onProviderFailure?.(provider.label, reason);
   }
 
   private async buildCandidateFiles(root: string): Promise<CandidateFile[]> {

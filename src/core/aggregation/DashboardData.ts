@@ -94,6 +94,7 @@ export function buildDashboardState(
       name: project.projectName,
       aura: projectAura,
       challenges: project.challenges.length,
+      breakdown: buildBreakdown(project.categoryScores),
       strongCategories: SCORE_CATEGORIES.filter(
         (c) => project.categoryScores[c].sampleCount >= MIN_SAMPLES_FOR_INSIGHT && project.categoryScores[c].value >= 80,
       ),
@@ -165,6 +166,7 @@ function buildHistory(project: ProjectData, now: number): HistoryItem[] {
       strengths: c.evaluation.strengths,
       gaps: c.evaluation.gaps,
       generatedBy: c.question.generatedBy ?? 'deterministic',
+      generator: c.question.generator,
     }));
 }
 

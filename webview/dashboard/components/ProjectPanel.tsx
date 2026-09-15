@@ -1,38 +1,111 @@
 import type { DashboardState } from '../../shared/messages';
+import { IconAlert, IconChallenge, IconCheck, IconCube } from '../../shared/Icons';
+import { BreakdownBars } from './BreakdownBars';
 
 export function ProjectPanel({ project }: { project: DashboardState['project'] }): JSX.Element {
+  const noSignal = project.strongCategories.length === 0 && project.weakCategories.length === 0;
+
   return (
-    <div className="codora-card">
-      <div className="codora-muted" style={{ fontSize: 11, marginBottom: 4, letterSpacing: 0.5 }}>PROJECT</div>
-      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{project.name}</div>
-      <div style={{ marginBottom: 12 }}>
-        Aura: <strong>{project.aura !== null ? Math.round(project.aura) : '—'}</strong>
-        <span className="codora-muted"> · {project.challenges} challenges</span>
+    <>
+      <div className="dash-stats">
+        <div className="stat">
+          <div className="stat-label">
+            <IconCube size={13} />
+            Project aura
+          </div>
+          <div className="stat-value">{project.aura !== null ? Math.round(project.aura) : '—'}</div>
+          <div className="stat-foot">this workspace only</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <IconChallenge size={13} />
+            Challenges
+          </div>
+          <div className="stat-value">{project.challenges}</div>
+          <div className="stat-foot">answered in this workspace</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <IconCheck size={13} />
+            Strong areas
+          </div>
+          <div className="stat-value">{project.strongCategories.length}</div>
+          <div className="stat-foot">scoring 80 or above</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <IconAlert size={13} />
+            Needs work
+          </div>
+          <div className="stat-value">{project.weakCategories.length}</div>
+          <div className="stat-foot">scoring below 60</div>
+        </div>
       </div>
 
-      {project.strongCategories.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <div className="codora-muted" style={{ fontSize: 11, marginBottom: 4 }}>Strong areas</div>
-          {project.strongCategories.map((c) => (
-            <div key={c} style={{ fontSize: 13, textTransform: 'capitalize' }}>✓ {c}</div>
-          ))}
-        </div>
-      )}
+      <div className="dash-cols dash-cols-wide">
+        <section className="panel">
+          <div className="panel-head">
+            <span className="panel-head-title c-label">Score by category</span>
+            <span className="c-pill panel-head-trailing">this workspace</span>
+          </div>
+          {project.breakdown.length > 0 ? (
+            <BreakdownBars breakdown={project.breakdown} />
+          ) : (
+            <div className="c-empty">
+              <span className="c-empty-icon">
+                <IconCube size={18} />
+              </span>
+              No category scores yet for this project.
+            </div>
+          )}
+        </section>
 
-      {project.weakCategories.length > 0 && (
-        <div>
-          <div className="codora-muted" style={{ fontSize: 11, marginBottom: 4 }}>Needs work</div>
-          {project.weakCategories.map((c) => (
-            <div key={c} style={{ fontSize: 13, textTransform: 'capitalize' }}>⚠ {c}</div>
-          ))}
-        </div>
-      )}
+        <section className="panel">
+          <div className="panel-head">
+            <span className="panel-head-title c-label">Where you stand</span>
+          </div>
 
-      {project.strongCategories.length === 0 && project.weakCategories.length === 0 && (
-        <div className="codora-muted" style={{ fontSize: 13 }}>
-          Keep coding. Codora needs a little more activity before it can identify your strengths and weaknesses.
-        </div>
-      )}
-    </div>
+          {noSignal ? (
+            <div className="c-empty">
+              <span className="c-empty-icon">
+                <IconChallenge size={18} />
+              </span>
+              Keep coding. Codora needs a little more activity before it can tell your
+              strengths from your weak spots.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {project.strongCategories.length > 0 && (
+                <div>
+                  <div className="c-label" style={{ marginBottom: 8 }}>Strong</div>
+                  <div className="set-chips">
+                    {project.strongCategories.map((c) => (
+                      <span className="c-pill c-pill-good" key={c} style={{ textTransform: 'capitalize' }}>
+                        <IconCheck size={11} strokeWidth={2.4} />
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {project.weakCategories.length > 0 && (
+                <div>
+                  <div className="c-label" style={{ marginBottom: 8 }}>Needs work</div>
+                  <div className="set-chips">
+                    {project.weakCategories.map((c) => (
+                      <span className="c-pill c-pill-critical" key={c} style={{ textTransform: 'capitalize' }}>
+                        <IconAlert size={11} strokeWidth={2.2} />
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+    </>
   );
 }

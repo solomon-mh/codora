@@ -1,3 +1,4 @@
+import type { AIModelIdentity } from '../ai/AIIdentity';
 import type { ScoreCategory } from '../scoring/ScoreTypes';
 
 /** The 8 question types from spec section 12 (A-H). */
@@ -43,7 +44,24 @@ export const QUESTION_TYPE_TO_SCORE_CATEGORY: Record<QuestionType, ScoreCategory
   performance: 'performance',
 };
 
+export const ALL_QUESTION_TYPES: QuestionType[] = [
+  'recall',
+  'prediction',
+  'cause',
+  'debugging',
+  'architecture',
+  'testing',
+  'security',
+  'performance',
+];
+
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
+
+/** A source file (path + contents) that a question can be generated from. */
+export interface FileContext {
+  relativePath: string;
+  text: string;
+}
 
 export interface QuestionOption {
   id: string;
@@ -90,13 +108,18 @@ export interface GeneratedQuestion {
   /** Set when this question is a follow-up to a shallow prior answer. */
   followUpToChallengeId?: string;
   /**
-   * Whether an AI provider wrote this question, or a local deterministic
-   * template did — shown in the UI so it's never ambiguous. Optional here
-   * only so individual templates don't each have to set it; QuestionGenerator
-   * fills in 'deterministic' by default, and AIQuestionGenerator sets 'ai'
-   * explicitly, so every question that actually reaches a caller has it.
+   * How this question was produced. Every question generated now is 'ai';
+   * 'deterministic' only appears on history records stored before local
+   * template generation was removed, which the history UI still labels
+   * correctly.
    */
   generatedBy?: 'ai' | 'deterministic';
+  /**
+   * Which model wrote this question. Absent on questions stored before
+   * Codora recorded it (and on the retired deterministic templates), which
+   * the UI shows as an unattributed model rather than inventing a name.
+   */
+  generator?: AIModelIdentity;
 }
 
 export interface ChallengeAnswer {
