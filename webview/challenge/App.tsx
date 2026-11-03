@@ -300,10 +300,15 @@ function ResultView({ result, freeText }: { result: ResultState; freeText?: stri
           </div>
           <div>
             <dt className="faint">Aura</dt>
-            <dd className={`mono ${auraDelta >= 0 ? 'tone-good' : 'tone-critical'}`}>
-              {auraDelta >= 0 ? '+' : '−'}
-              {Math.abs(auraDelta).toFixed(1)}
-            </dd>
+            {/* A change that rounds to zero is "no change", never a green "+0.0". */}
+            {Math.abs(auraDelta) < 0.05 ? (
+              <dd className="mono faint">No change</dd>
+            ) : (
+              <dd className={`mono ${auraDelta > 0 ? 'tone-good' : 'tone-critical'}`}>
+                {auraDelta > 0 ? '+' : '−'}
+                {Math.abs(auraDelta).toFixed(1)}
+              </dd>
+            )}
           </div>
         </dl>
       </div>

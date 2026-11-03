@@ -81,8 +81,9 @@ describe('buildDashboardState', () => {
     const projectRecall = state.project.breakdown.find((b) => b.category === 'recall');
     const globalRecall = state.breakdown.find((b) => b.category === 'recall');
 
-    expect(projectRecall?.value).toBe(20);
-    expect(globalRecall?.value).toBe(100);
+    expect(projectRecall?.value).toBe(projectScores.recall.value);
+    expect(globalRecall?.value).toBe(globalScores.recall.value);
+    expect(projectRecall?.value).toBeLessThan(globalRecall?.value ?? 0);
 
     // The project breakdown must only describe categories this project scored.
     expect(state.project.breakdown.map((b) => b.category)).toEqual(['recall']);

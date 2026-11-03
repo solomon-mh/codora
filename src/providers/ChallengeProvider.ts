@@ -185,10 +185,16 @@ export class ChallengeProvider {
     }
     if (message.type === 'submitAnswer') {
       try {
+        // Read the question before submitting: submitAnswer clears the pending one.
+        const body = this.controller.getPendingQuestion()?.body;
+        const correctOptionText =
+          body?.kind === 'multiple-choice'
+            ? body.options.find((o) => o.id === body.correctOptionId)?.text
+            : undefined;
         const result = await this.controller.submitAnswer(message.payload);
         this.post({
           type: 'result',
-          payload: { evaluation: result.evaluation, auraDelta: result.auraDelta },
+          payload: { evaluation: result.evaluation, auraDelta: result.auraDelta, correctOptionText },
         });
         if (result.followUp) {
           this.pendingView = { kind: 'question', question: result.followUp };

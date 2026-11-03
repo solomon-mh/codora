@@ -2,7 +2,11 @@ import type { RollingScoreMap } from '../scoring/ScoreTypes';
 import type { ChallengeRecord } from '../questions/QuestionTypes';
 import type { SessionRecord } from '../session/SessionState';
 
-export const SCHEMA_VERSION = 1;
+/**
+ * 2: category scores start from a neutral 50 instead of the first answer's
+ *    result (see ScoreEngine.NEUTRAL_START); stored scores are migrated.
+ */
+export const SCHEMA_VERSION = 2;
 
 export type ChallengeInterval = '10min' | '30min' | '1hour' | 'custom' | 'adaptive' | 'off';
 export type DifficultySetting = 'adaptive' | 'easy' | 'medium' | 'hard';

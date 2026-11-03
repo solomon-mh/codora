@@ -8,7 +8,8 @@ import {
   type ProjectData,
   defaultSettings,
 } from './StorageSchema';
-import { createDefaultRollingScores } from '../scoring/ScoreTypes';
+import { SCORE_CATEGORIES, createDefaultRollingScores } from '../scoring/ScoreTypes';
+import { rebaseOnNeutralStart, replayRollingScores } from '../scoring/ScoreEngine';
 import { getLogger } from '../../utils/logger';
 
 const GLOBAL_KEY = 'codora.globalProfile';
@@ -169,18 +170,36 @@ export class StorageManager {
     }
   }
 
-  /** Schema migration hook. No prior versions exist yet, so this is currently a passthrough. */
+  /**
+   * Schema migrations. These run on read and are persisted by the next
+   * write, so they must be pure functions of the stored data.
+   */
   private migrateGlobal(raw: GlobalProfile): GlobalProfile {
     if (raw.schemaVersion === SCHEMA_VERSION) return raw;
-    return { ...defaultGlobalProfile(), ...raw, schemaVersion: SCHEMA_VERSION };
+    const migrated = { ...defaultGlobalProfile(), ...raw, schemaVersion: SCHEMA_VERSION };
+    if ((raw.schemaVersion ?? 1) < 2 && raw.categoryScores) {
+      // The global profile doesn't keep individual answers, so it can't be
+      // replayed; rebase each category onto the neutral start instead.
+      const categoryScores = { ...raw.categoryScores };
+      for (const category of SCORE_CATEGORIES) {
+        if (categoryScores[category]) categoryScores[category] = rebaseOnNeutralStart(categoryScores[category]);
+      }
+      migrated.categoryScores = categoryScores;
+    }
+    return migrated;
   }
 
   private migrateProject(raw: ProjectData): ProjectData {
     if (raw.schemaVersion === SCHEMA_VERSION) return raw;
-    return {
+    const migrated = {
       ...defaultProjectData(this.projectId, this.projectName),
       ...raw,
       schemaVersion: SCHEMA_VERSION,
     };
+    if ((raw.schemaVersion ?? 1) < 2 && Array.isArray(raw.challenges)) {
+      // Every answer is kept per project, so its scores replay exactly.
+      migrated.categoryScores = replayRollingScores(raw.challenges);
+    }
+    return migrated;
   }
 }
