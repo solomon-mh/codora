@@ -3,11 +3,31 @@ import { updateRollingScore, computeAura, auraLabel } from '../../../src/core/sc
 import { createDefaultRollingScores } from '../../../src/core/scoring/ScoreTypes';
 
 describe('updateRollingScore', () => {
-  it('sets the first sample directly to the result value', () => {
+  it('starts each category from a neutral 50, not the first result', () => {
     const scores = createDefaultRollingScores();
-    const next = updateRollingScore(scores, 'recall', 1, 1000);
-    expect(next.recall.value).toBe(100);
-    expect(next.recall.sampleCount).toBe(1);
+    expect(updateRollingScore(scores, 'recall', 1, 1000).recall.value).toBe(62.5);
+    expect(updateRollingScore(scores, 'recall', 0, 1000).recall.value).toBe(37.5);
+    expect(updateRollingScore(scores, 'recall', 1, 1000).recall.sampleCount).toBe(1);
+  });
+
+  it('lowers the score on every wrong answer, however low it already is', () => {
+    let scores = createDefaultRollingScores();
+    let previous = Infinity;
+    for (let i = 0; i < 20; i++) {
+      scores = updateRollingScore(scores, 'debugging', 0, 1000 + i);
+      expect(scores.debugging.value).toBeLessThan(previous);
+      previous = scores.debugging.value;
+    }
+  });
+
+  it('lowers the aura when a wrong answer lands in an already-weak category', () => {
+    let scores = createDefaultRollingScores();
+    scores = updateRollingScore(scores, 'recall', 1, 1000);
+    scores = updateRollingScore(scores, 'debugging', 0, 1000);
+    scores = updateRollingScore(scores, 'debugging', 0, 2000);
+    const before = computeAura(scores);
+    scores = updateRollingScore(scores, 'debugging', 0, 3000);
+    expect(computeAura(scores)).toBeLessThan(before);
   });
 
   it('weights recent results more heavily than the running average', () => {
@@ -42,10 +62,10 @@ describe('computeAura', () => {
 
   it('renormalizes over only the categories with data', () => {
     let scores = createDefaultRollingScores();
-    scores = updateRollingScore(scores, 'recall', 1, 1000); // recall = 100
-    // Only recall has data — Aura should equal 100, not be diluted by
-    // the 7 other untouched categories.
-    expect(computeAura(scores)).toBe(100);
+    scores = updateRollingScore(scores, 'recall', 1, 1000); // recall = 62.5
+    // Only recall has data — Aura should equal recall's score, not be
+    // diluted by the 7 other untouched categories.
+    expect(computeAura(scores)).toBe(scores.recall.value);
   });
 
   it('produces a value between 0 and 100 for mixed scores', () => {

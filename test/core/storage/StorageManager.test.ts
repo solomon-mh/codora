@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { StorageManager } from '../../../src/core/storage/StorageManager';
 import { defaultSettings } from '../../../src/core/storage/StorageSchema';
 import { initLogger } from '../../../src/utils/logger';
+import { replayRollingScores } from '../../../src/core/scoring/ScoreEngine';
+import { createDefaultRollingScores } from '../../../src/core/scoring/ScoreTypes';
+import type { ChallengeRecord } from '../../../src/core/questions/QuestionTypes';
 
 initLogger({ appendLine: () => {} });
 
@@ -101,5 +104,61 @@ describe('StorageManager', () => {
     });
 
     expect(storage.getGlobalProfile().settings.ai.anthropicModel).toBe('claude-opus-5');
+  });
+});
+
+/** A stored answer, as kept in a project's challenge history. */
+function answered(type: 'recall' | 'debugging', correct: boolean, answeredAt: number): ChallengeRecord {
+  return {
+    question: { id: `q${answeredAt}`, type },
+    answer: { questionId: `q${answeredAt}`, kind: 'multiple-choice', answeredAt, timeTakenMs: 1000 },
+    evaluation: { score: correct ? 1 : 0, correct, confidence: 1, strengths: [], gaps: [], feedback: '' },
+  } as unknown as ChallengeRecord;
+}
+
+describe('StorageManager migration to neutral-start scoring (schema 2)', () => {
+  it('replays a project’s stored answers under the new rule', async () => {
+    const context = fakeContext();
+    const challenges = [answered('recall', true, 1), answered('debugging', false, 2), answered('debugging', false, 3)];
+    await context.workspaceState.update('codora.project.proj1', {
+      schemaVersion: 1,
+      projectId: 'proj1',
+      projectName: 'p',
+      sessions: [],
+      challenges,
+      // Old rule: seeded with the first result.
+      categoryScores: { ...createDefaultRollingScores(), recall: { value: 100, sampleCount: 1, lastUpdated: 1 }, debugging: { value: 0, sampleCount: 2, lastUpdated: 3 } },
+      auraHistory: [],
+    });
+
+    const project = new StorageManager(context, 'proj1', 'p').getProjectData();
+
+    expect(project.schemaVersion).toBe(2);
+    expect(project.categoryScores).toEqual(replayRollingScores(challenges));
+    expect(project.categoryScores.recall.value).toBe(62.5);
+    expect(project.categoryScores.debugging.value).toBeCloseTo(28.125);
+  });
+
+  it('rebases global scores onto the neutral start, exactly when a category was all right or all wrong', async () => {
+    const context = fakeContext();
+    await context.globalState.update('codora.globalProfile', {
+      schemaVersion: 1,
+      onboarded: true,
+      settings: defaultSettings(),
+      categoryScores: { ...createDefaultRollingScores(), recall: { value: 100, sampleCount: 1, lastUpdated: 1 }, debugging: { value: 0, sampleCount: 2, lastUpdated: 3 } },
+      streak: { current: 0, longest: 0, lastActiveDate: null, daysActive: 0 },
+      badges: [],
+      auraHistory: [],
+      challengesPausedUntil: null,
+      aiPromptDismissed: false,
+    });
+
+    const global = new StorageManager(context, 'proj1', 'p').getGlobalProfile();
+    const replayed = replayRollingScores([answered('recall', true, 1), answered('debugging', false, 2), answered('debugging', false, 3)]);
+
+    expect(global.schemaVersion).toBe(2);
+    expect(global.categoryScores.recall.value).toBeCloseTo(replayed.recall.value);
+    expect(global.categoryScores.debugging.value).toBeCloseTo(replayed.debugging.value);
+    expect(global.categoryScores.reasoning.sampleCount).toBe(0);
   });
 });
