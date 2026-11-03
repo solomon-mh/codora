@@ -1,0 +1,17 @@
+{
+  "name": "codora-metrics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Codora's opt-in usage-count endpoint — a Cloudflare Worker with D1.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply codora-metrics --remote",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "^4.0.0"
+  }
+}

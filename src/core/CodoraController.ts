@@ -79,6 +79,8 @@ export class CodoraController implements vscode.Disposable {
 
   start(): void {
     this.sessionManager.start();
+    // Counts active installs (daily/weekly actives, week-1 retention). Dropped unless opted in.
+    this.metrics.track({ name: 'activated' });
   }
 
   dispose(): void {
