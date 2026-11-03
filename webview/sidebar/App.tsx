@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type {
   ExtensionToSidebarMessage,
   SidebarState,
   SidebarToExtensionMessage,
 } from '../shared/messages';
-import {
-  IconAura,
-  IconClock,
-  IconCube,
-  IconFlame,
-  IconGrid,
-  IconPlay,
-} from '../shared/Icons';
+import { ScoreScale } from '../shared/ScoreScale';
+import { MeasureList } from '../shared/Report';
+import { AURA_BOUNDARIES, auraTier, nextTierText, scoreTone } from '../shared/aura';
 
 const vscode = getVsCodeApi<SidebarToExtensionMessage>();
 
@@ -32,102 +26,73 @@ export function App(): JSX.Element {
   if (!state) {
     return (
       <div className="side">
-        <div className="c-skeleton" style={{ height: 86 }} />
-        <div className="c-skeleton" style={{ height: 34 }} />
-        <div className="c-skeleton" style={{ height: 60 }} />
+        <div className="skeleton" style={{ height: 56, width: 120 }} />
+        <div className="skeleton" style={{ height: 8 }} />
+        <div className="skeleton" style={{ height: 34 }} />
       </div>
     );
   }
 
-  return (
-    <div className="side c-enter">
-      <div className="side-brand">
-        <span className="side-brand-mark">
-          <IconAura size={13} strokeWidth={1.8} />
-        </span>
-        <span className="side-brand-name">Codora</span>
-      </div>
+  const aura = Math.round(state.aura ?? 0);
+  const tier = auraTier(aura);
 
-      <div className="side-hero">
-        <div className="c-label" style={{ marginBottom: 7 }}>Aura</div>
-        <div className="side-hero-value">
-          <span className="side-hero-number">
-            {state.hasEnoughData ? Math.round(state.aura ?? 0) : '—'}
-          </span>
-          {state.hasEnoughData && <span className="c-muted" style={{ fontSize: 11 }}>/ 100</span>}
-        </div>
-        <div className="c-muted" style={{ fontSize: 11.5, marginTop: 4 }}>
-          {state.hasEnoughData ? state.auraLabel : 'Not enough data yet'}
-        </div>
-        <div className="side-hero-foot">
-          <span className={`c-streak${state.streakCurrent > 0 ? '' : ' is-zero'}`}>
-            <IconFlame size={14} />
-            <span className="c-streak-value">{state.streakCurrent}</span>
-            <span className="c-streak-label">day streak</span>
-          </span>
-        </div>
-      </div>
+  return (
+    <div className="side">
+      <section className="side-reading">
+        <p className="meta">
+          <span>Your aura</span>
+          <span className="faint">{state.projectName}</span>
+        </p>
+        {state.hasEnoughData ? (
+          <>
+            <div className="reading">
+              <span className="reading-value side-value">{aura}</span>
+              <span className="reading-of">/100</span>
+            </div>
+            <ScoreScale score={aura} tone={scoreTone(aura)} boundaries={AURA_BOUNDARIES} height={6} animate={false} />
+            <p className="side-tier">
+              <strong>{tier.label}</strong>
+              <span className="muted"> · {nextTierText(tier)}</span>
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="verdict-sm side-empty">No reading yet.</p>
+            <p className="muted side-hint">Answer 3 challenges about your code to get your first score.</p>
+          </>
+        )}
+      </section>
 
       <div className="side-actions">
-        <button className="c-btn c-btn-block" onClick={() => vscode.postMessage({ type: 'startChallenge' })}>
-          <IconPlay size={12} />
+        <button className="btn btn--primary btn--block" onClick={() => vscode.postMessage({ type: 'startChallenge' })}>
           Take a challenge
         </button>
-        <button className="c-btn-ghost c-btn-block" onClick={() => vscode.postMessage({ type: 'openDashboard' })}>
-          <IconGrid size={13} />
+        <button className="btn btn--block" onClick={() => vscode.postMessage({ type: 'openDashboard' })}>
           Open dashboard
         </button>
       </div>
 
-      {state.challengesPaused && (
-        <div className="side-note">
-          <IconClock size={13} />
-          Challenges are paused
-        </div>
-      )}
+      {state.challengesPaused && <p className="callout">Challenges are paused.</p>}
 
-      <Section title="Progress">
+      <section>
+        <h2 className="side-title">Categories</h2>
         {state.breakdown.length === 0 ? (
-          <div className="c-muted" style={{ fontSize: 11.5, lineHeight: 1.5 }}>{state.insightHint}</div>
+          <p className="muted side-hint">{state.insightHint}</p>
         ) : (
-          state.breakdown.map((item) => (
-            <div className="side-row" key={item.category}>
-              <div className="side-row-head">
-                <span className="side-row-name">{item.label}</span>
-                <span className="side-row-value">
-                  {item.sampleCount > 0 ? Math.round(item.value) : '–'}
-                </span>
-              </div>
-              <div className="c-meter">
-                {item.sampleCount > 0 && (
-                  <div
-                    className="c-meter-fill"
-                    style={{ width: `${Math.max(3, Math.min(100, item.value))}%` }}
-                  />
-                )}
-              </div>
-            </div>
-          ))
+          <MeasureList
+            items={state.breakdown.map((b) => ({
+              label: b.label,
+              value: b.sampleCount > 0 ? Math.round(b.value) : '—',
+              tone: b.sampleCount > 0 && b.value < 60 ? scoreTone(b.value) : undefined,
+            }))}
+          />
         )}
-      </Section>
+      </section>
 
-      <Section title="Project">
-        <div className="side-project" title={state.projectName}>
-          <span style={{ color: 'var(--fg-faint)', display: 'flex' }}>
-            <IconCube size={13} />
-          </span>
-          <span className="side-project-name">{state.projectName}</span>
-        </div>
-      </Section>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }): JSX.Element {
-  return (
-    <div>
-      <div className="c-label side-section-title">{title}</div>
-      {children}
+      <p className="side-foot">
+        <span className={state.streakCurrent > 0 ? 'side-streak is-live' : 'side-streak'} />
+        {state.streakCurrent}-day streak
+      </p>
     </div>
   );
 }

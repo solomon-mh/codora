@@ -29,6 +29,9 @@ function webviewConfig(name) {
     sourcemap: !production,
     minify: production,
     logLevel: 'info',
+    // The bundled Archivo font is emitted next to the webview bundles and served from the extension.
+    loader: { '.woff2': 'file' },
+    assetNames: 'fonts/[name]-[hash]',
   };
 }
 

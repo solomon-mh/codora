@@ -65,13 +65,21 @@ export type AuraLabel =
   | 'Needs attention'
   | 'Beginning';
 
+/** Aura tiers, lowest first. The webview's tier scale draws from this same table. */
+export const AURA_TIERS: readonly { min: number; label: AuraLabel }[] = [
+  { min: 0, label: 'Beginning' },
+  { min: 40, label: 'Needs attention' },
+  { min: 60, label: 'Developing' },
+  { min: 70, label: 'Strong' },
+  { min: 80, label: 'Excellent' },
+  { min: 90, label: 'Exceptional' },
+];
+
 export function auraLabel(aura: number): AuraLabel {
-  if (aura >= 90) return 'Exceptional';
-  if (aura >= 80) return 'Excellent';
-  if (aura >= 70) return 'Strong';
-  if (aura >= 60) return 'Developing';
-  if (aura >= 40) return 'Needs attention';
-  return 'Beginning';
+  for (let i = AURA_TIERS.length - 1; i > 0; i--) {
+    if (aura >= AURA_TIERS[i].min) return AURA_TIERS[i].label;
+  }
+  return AURA_TIERS[0].label;
 }
 
 function clamp(v: number, min: number, max: number): number {

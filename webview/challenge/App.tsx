@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type {
   ChallengeSetupOption,
@@ -9,22 +8,12 @@ import type {
 } from '../shared/messages';
 import type { GeneratedQuestion } from '../../src/core/questions/QuestionTypes';
 import type { EvaluationResult } from '../../src/core/scoring/ScoreTypes';
-import {
-  IconAlert,
-  IconArrowRight,
-  IconAura,
-  IconBulb,
-  IconCheck,
-  IconCheckCircle,
-  IconKey,
-  IconPlug,
-  IconRefresh,
-  IconTarget,
-  IconTerminal,
-} from '../shared/Icons';
+import { IconArrowRight, IconKey, IconPlug, IconTerminal } from '../shared/Icons';
 import { ModelBadge } from '../shared/ModelBadge';
 
 const vscode = getVsCodeApi<ChallengeToExtensionMessage>();
+
+const SUBMIT_KEYS = /Mac/.test(navigator.userAgent) ? '⌘ Enter' : 'Ctrl Enter';
 
 interface ResultState {
   evaluation: EvaluationResult;
@@ -67,273 +56,304 @@ export function App(): JSX.Element {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  if (unavailable) return <UnavailableView state={unavailable} />;
-
-  if (!question) {
-    return (
-      <div className="chal">
-        <Header />
-        <div className="chal-loading">
-          <span className="chal-spinner" />
-          Reading your recent changes and writing a question…
-        </div>
-      </div>
-    );
-  }
+  const canSubmit =
+    !!question &&
+    !result &&
+    !submitting &&
+    (question.body.kind === 'multiple-choice' ? !!selectedOption : freeText.trim().length > 0);
 
   const submit = () => {
+    if (!question || !canSubmit) return;
     setSubmitting(true);
-    if (question.body.kind === 'multiple-choice') {
-      if (!selectedOption) return;
-      vscode.postMessage({
-        type: 'submitAnswer',
-        payload: {
-          questionId: question.id,
-          kind: 'multiple-choice',
-          selectedOptionId: selectedOption,
-          answeredAt: Date.now(),
-          timeTakenMs: Date.now() - startedAt.current,
-        },
-      });
-    } else {
-      vscode.postMessage({
-        type: 'submitAnswer',
-        payload: {
-          questionId: question.id,
-          kind: 'free-text',
-          text: freeText,
-          answeredAt: Date.now(),
-          timeTakenMs: Date.now() - startedAt.current,
-        },
-      });
-    }
+    const timing = { answeredAt: Date.now(), timeTakenMs: Date.now() - startedAt.current };
+    vscode.postMessage({
+      type: 'submitAnswer',
+      payload:
+        question.body.kind === 'multiple-choice'
+          ? { questionId: question.id, kind: 'multiple-choice', selectedOptionId: selectedOption!, ...timing }
+          : { questionId: question.id, kind: 'free-text', text: freeText, ...timing },
+    });
   };
 
-  const canSubmit =
-    question.body.kind === 'multiple-choice' ? !!selectedOption : freeText.trim().length > 0;
+  // Number keys pick an answer; Ctrl/⌘+Enter checks it. Answering never needs the mouse.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        submitRef.current();
+        return;
+      }
+      if (!question || result || question.body.kind !== 'multiple-choice') return;
+      const typing =
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLInputElement && e.target.type !== 'radio');
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      const option = question.body.options[Number(e.key) - 1];
+      if (option) setSelectedOption(option.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [question, result]);
+
+  if (unavailable) return <UnavailableView state={unavailable} />;
+  if (!question) return <LoadingView />;
+
+  const { provenance } = question;
+  const file = provenance.sourceFiles[0];
 
   return (
-    <div className="chal c-enter">
-      <Header
-        meta={
-          <>
-            <span className="c-pill" style={{ textTransform: 'capitalize' }}>{question.category}</span>
-            <span className="c-pill" style={{ textTransform: 'capitalize' }}>{question.difficulty}</span>
-            <ModelBadge generator={question.generator} generatedBy={question.generatedBy} />
-          </>
-        }
-      />
-
-      <h1 className="chal-prompt">{question.prompt}</h1>
-
-      {/* Why this question exists — supporting info, so it stays small and quiet. */}
-      <p className="chal-reason">
-        <IconBulb size={12} className="chal-reason-icon" />
-        <span>{question.provenance.reason}</span>
+    <div className="chal">
+      <p className="meta chal-meta">
+        <span className="cap meta-strong">{question.category}</span>
+        <span className="cap">{question.difficulty}</span>
+        {question.isRetentionCheck && <span>Asked before</span>}
+        <ModelBadge generator={question.generator} generatedBy={question.generatedBy} size={11} />
       </p>
 
-      {!result && question.body.kind === 'multiple-choice' && (
-        <div className="chal-options">
-          {question.body.options.map((opt) => (
-            <label className="c-option chal-option" key={opt.id}>
-              <input
-                type="radio"
-                className="c-radio"
-                name="option"
-                checked={selectedOption === opt.id}
-                onChange={() => setSelectedOption(opt.id)}
-              />
-              <span className="c-option-text">{opt.text}</span>
-            </label>
-          ))}
+      <h1 className="verdict-sm chal-question">{question.prompt}</h1>
+      <p className="muted chal-reason">{provenance.reason}</p>
+
+      {provenance.codeSnippet && (
+        <figure className="chal-code">
+          {file && (
+            <figcaption className="chal-code-head" title={provenance.sourceFiles.join('\n')}>
+              <span className="code chal-path">{file}</span>
+              {provenance.subjectFunction && <span className="code faint">{provenance.subjectFunction}</span>}
+            </figcaption>
+          )}
+          <pre className="chal-code-body" tabIndex={0} aria-label={`Code from ${file ?? 'your workspace'}`}>
+            <code>{provenance.codeSnippet}</code>
+          </pre>
+        </figure>
+      )}
+
+      {question.body.kind === 'multiple-choice' && (
+        <div className="choices" role="radiogroup" aria-label="Answers">
+          {question.body.options.map((opt) => {
+            const picked = selectedOption === opt.id;
+            const state = !result
+              ? ''
+              : opt.text === result.correctOptionText || (picked && result.evaluation.correct)
+                ? 'is-right'
+                : picked
+                  ? 'is-wrong'
+                  : 'is-faded';
+            return (
+              <label className={`choice ${state}`} key={opt.id}>
+                <input
+                  type="radio"
+                  name="answer"
+                  className="sr-input"
+                  checked={picked}
+                  disabled={!!result}
+                  onChange={() => setSelectedOption(opt.id)}
+                />
+                <span className="choice-radio" aria-hidden="true" />
+                <span className="choice-text">{opt.text}</span>
+                {state === 'is-right' && <span className="sev tone-good">{picked ? 'Your answer' : 'Answer'}</span>}
+                {state === 'is-wrong' && <span className="sev tone-critical">Your answer</span>}
+              </label>
+            );
+          })}
         </div>
       )}
 
-      {!result && question.body.kind === 'free-text' && (
-        <div style={{ marginBottom: 22 }}>
+      {question.body.kind === 'free-text' && !result && (
+        <div className="chal-free">
           <textarea
-            className="c-textarea"
+            className="textarea"
             value={freeText}
             maxLength={question.body.maxLength}
             onChange={(e) => setFreeText(e.target.value)}
-            placeholder="Explain it in your own words…"
+            placeholder="Explain it in your own words"
             rows={6}
             autoFocus
           />
-          <div className="chal-counter">
+          <span className="chal-count mono faint">
             {freeText.length}/{question.body.maxLength}
-          </div>
-        </div>
-      )}
-
-      {!result && (
-        <div className="chal-actions">
-          <button className="c-btn" onClick={submit} disabled={!canSubmit || submitting}>
-            {submitting ? 'Checking…' : 'Submit answer'}
-          </button>
-          <span className="chal-hint">
-            {canSubmit ? 'Your answer is scored against the code it came from.' : 'Pick or write an answer to continue.'}
           </span>
         </div>
       )}
 
-      {result && <ResultView result={result} onClose={() => vscode.postMessage({ type: 'close' })} />}
+      {!result && (
+        <footer className="chal-foot">
+          <span className="faint chal-hint">
+            {question.body.kind === 'multiple-choice'
+              ? `1–${question.body.options.length} to choose · ${SUBMIT_KEYS} to check`
+              : `${SUBMIT_KEYS} to check`}
+          </span>
+          <button className="btn btn--primary" onClick={submit} disabled={!canSubmit}>
+            {submitting ? 'Checking…' : 'Check answer'}
+          </button>
+        </footer>
+      )}
+
+      {result && <ResultView result={result} freeText={question.body.kind === 'free-text' ? freeText : undefined} />}
     </div>
   );
 }
 
-function Header({ meta }: { meta?: ReactNode }): JSX.Element {
+function LoadingView(): JSX.Element {
   return (
-    <div className="chal-head">
-      <span className="chal-mark">
-        <IconAura size={14} strokeWidth={1.8} />
-      </span>
-      <span className="chal-head-name">Codora Challenge</span>
-      {meta && <span className="chal-head-meta">{meta}</span>}
+    <div className="chal">
+      <span className="skeleton" style={{ height: 12, width: 180 }} />
+      <span className="skeleton" style={{ height: 26, width: '80%', marginTop: 14 }} />
+      <div className="chal-code chal-code-loading" aria-hidden="true">
+        {[64, 48, 80, 36, 58].map((w, i) => (
+          <span key={i} className="skeleton" style={{ height: 10, width: `${w}%` }} />
+        ))}
+      </div>
+      <p className="muted">Reading your recent changes and writing a question…</p>
     </div>
   );
 }
 
 /**
- * Shown in place of a question when no AI provider could generate one.
- * Occupies the same space a question would, so the reason is impossible to
- * miss, and carries the action that actually resolves it.
+ * Shown in place of a question when no model could write one. Occupies the
+ * same space a question would, so the reason is impossible to miss, and
+ * carries the action that actually resolves it.
  */
 function UnavailableView({ state }: { state: ChallengeUnavailable }): JSX.Element {
   return (
-    <div className="chal c-enter">
-      <Header />
-
-      <div className="chal-result-head is-missed">
-        <span className="chal-result-icon is-missed">
-          <IconAlert size={18} />
-        </span>
-        <span>
-          <span className="chal-result-title" style={{ display: 'block' }}>{state.title}</span>
-          <span className="c-muted" style={{ fontSize: 12 }}>No question could be generated.</span>
-        </span>
-      </div>
-
-      <div className="chal-block">
-        <div className="chal-detail">{state.detail}</div>
-      </div>
+    <div className="chal">
+      <p className="meta chal-meta">
+        <span className="sev tone-warning">No question this time</span>
+      </p>
+      <h1 className="verdict-sm chal-question">{state.title}</h1>
+      <p className="muted chal-reason">{state.detail}</p>
 
       {state.setupOptions && state.setupOptions.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div className="c-label" style={{ marginBottom: 8 }}>Configure a provider</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {state.setupOptions.map((option) => (
-              <button
-                key={option.kind}
-                className="chal-setup-btn"
-                onClick={() => vscode.postMessage({ type: 'action', payload: option.kind })}
-              >
-                <span className="chal-setup-icon">{setupIcon(option)}</span>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 13 }}>
-                    {option.label}
-                    {option.alreadyConfigured && (
-                      <span className="c-muted" style={{ fontSize: 11 }}> · already set up, replace</span>
-                    )}
-                  </span>
-                  <span className="c-muted" style={{ display: 'block', fontSize: 11.5, marginTop: 2 }}>
-                    {option.hint}
-                  </span>
+        <div className="rows chal-setup">
+          {state.setupOptions.map((option) => (
+            <button
+              key={option.kind}
+              className="row"
+              onClick={() => vscode.postMessage({ type: 'action', payload: option.kind })}
+            >
+              <span className="chal-setup-icon">{setupIcon(option)}</span>
+              <span className="row-text">
+                <strong>{option.label}</strong>
+                <span className="row-hint">
+                  {option.alreadyConfigured ? 'Already set up. Choose to replace it.' : option.hint}
                 </span>
-                <IconArrowRight size={15} className="chal-setup-arrow" />
-              </button>
-            ))}
-          </div>
+              </span>
+              <IconArrowRight size={14} className="faint" />
+            </button>
+          ))}
         </div>
       )}
 
-      <div className="chal-actions">
-        {state.action && (
-          <button
-            className="c-btn"
-            onClick={() => vscode.postMessage({ type: 'action', payload: state.action!.kind })}
-          >
-            {state.action.label}
-          </button>
-        )}
-        <button className="c-btn-ghost" onClick={() => vscode.postMessage({ type: 'retry' })}>
-          <IconRefresh size={13} />
-          Try again
-        </button>
-        <button className="c-btn-ghost" onClick={() => vscode.postMessage({ type: 'close' })}>
+      <footer className="chal-foot">
+        <button className="btn" onClick={() => vscode.postMessage({ type: 'close' })}>
           Close
         </button>
-      </div>
+        <span className="chal-foot-actions">
+          <button className="btn" onClick={() => vscode.postMessage({ type: 'retry' })}>
+            Try again
+          </button>
+          {state.action && (
+            <button
+              className="btn btn--primary"
+              onClick={() => vscode.postMessage({ type: 'action', payload: state.action!.kind })}
+            >
+              {state.action.label}
+            </button>
+          )}
+        </span>
+      </footer>
     </div>
   );
 }
 
 function setupIcon(option: ChallengeSetupOption): JSX.Element {
-  if (option.kind === 'setup-vscode-lm') return <IconPlug size={14} />;
-  if (option.kind === 'show-logs') return <IconTerminal size={14} />;
-  return <IconKey size={14} />;
+  if (option.kind === 'setup-vscode-lm') return <IconPlug size={15} />;
+  if (option.kind === 'show-logs') return <IconTerminal size={15} />;
+  return <IconKey size={15} />;
 }
 
-function ResultView({ result, onClose }: { result: ResultState; onClose: () => void }): JSX.Element {
-  const { evaluation, auraDelta, correctOptionText } = result;
+function ResultView({ result, freeText }: { result: ResultState; freeText?: string }): JSX.Element {
+  const { evaluation, auraDelta } = result;
+  const sectionRef = useRef<HTMLElement>(null);
+  const doneRef = useRef<HTMLButtonElement>(null);
+
+  // Bring the verdict into view and put focus on "Back to coding" without
+  // letting the focus jump scroll the question off the top.
+  useEffect(() => {
+    sectionRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    doneRef.current?.focus({ preventScroll: true });
+  }, []);
   const correct = evaluation.correct;
+  const hasLists = evaluation.strengths.length > 0 || evaluation.gaps.length > 0;
 
   return (
-    <div className="c-enter">
-      <div className={`chal-result-head ${correct ? 'is-correct' : 'is-missed'}`}>
-        <span className={`chal-result-icon ${correct ? 'is-correct' : 'is-missed'}`}>
-          {correct ? <IconCheckCircle size={20} /> : <IconTarget size={20} />}
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span className="chal-result-title" style={{ display: 'block' }}>
-            {correct ? 'Correct' : 'Not quite'}
-          </span>
-          <span className="c-muted" style={{ fontSize: 12 }}>
-            {Math.round(evaluation.score * 100)}% on this answer
-          </span>
-        </span>
-        <span className={`c-pill ${auraDelta >= 0 ? 'c-pill-good' : 'c-pill-critical'} c-num`}>
-          {auraDelta >= 0 ? '+' : ''}
-          {auraDelta.toFixed(1)} aura
-        </span>
+    <section className="chal-result" aria-live="polite" ref={sectionRef}>
+      <div className="chal-result-head">
+        <h2 className={`verdict chal-verdict ${correct ? 'tone-good' : 'tone-critical'}`}>
+          {correct ? 'Correct.' : 'Not quite.'}
+        </h2>
+        <dl className="chal-figures">
+          <div>
+            <dt className="faint">This answer</dt>
+            <dd className="mono">{Math.round(evaluation.score * 100)}%</dd>
+          </div>
+          <div>
+            <dt className="faint">Aura</dt>
+            <dd className={`mono ${auraDelta >= 0 ? 'tone-good' : 'tone-critical'}`}>
+              {auraDelta >= 0 ? '+' : '−'}
+              {Math.abs(auraDelta).toFixed(1)}
+            </dd>
+          </div>
+        </dl>
       </div>
 
-      <div className="chal-block">{evaluation.feedback}</div>
+      {freeText !== undefined && (
+        <p className="chal-said">
+          <strong>Your answer. </strong>
+          <span className="muted">{freeText}</span>
+        </p>
+      )}
 
-      {!correct && correctOptionText && (
-        <div className="chal-block">
-          <div className="c-label" style={{ marginBottom: 6 }}>The answer</div>
-          {correctOptionText}
+      <p className="chal-feedback">
+        <strong>Why. </strong>
+        {evaluation.feedback}
+      </p>
+
+      {hasLists && (
+        <div className="chal-split">
+          <div>
+            <h3 className="chal-split-title">What you got right</h3>
+            {evaluation.strengths.length > 0 ? (
+              <ul className="bullets">
+                {evaluation.strengths.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="faint">Nothing this time.</p>
+            )}
+          </div>
+          <div>
+            <h3 className="chal-split-title">Worth another look</h3>
+            {evaluation.gaps.length > 0 ? (
+              <ul className="bullets">
+                {evaluation.gaps.map((g) => (
+                  <li key={g}>{g}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="faint">Nothing to revisit.</p>
+            )}
+          </div>
         </div>
       )}
 
-      {(evaluation.strengths.length > 0 || evaluation.gaps.length > 0) && (
-        <div className="chal-block">
-          {evaluation.strengths.map((s) => (
-            <div className="chal-list-row" key={s}>
-              <span className="chal-list-icon" style={{ color: 'var(--good)' }}>
-                <IconCheck size={13} strokeWidth={2.4} />
-              </span>
-              <span>{s}</span>
-            </div>
-          ))}
-          {evaluation.gaps.map((g) => (
-            <div className="chal-list-row c-muted" key={g}>
-              <span className="chal-list-icon" style={{ color: 'var(--warn)' }}>
-                <IconAlert size={13} />
-              </span>
-              <span>{g}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="chal-actions">
-        <button className="c-btn" onClick={onClose}>
-          Done
+      <footer className="chal-foot chal-foot-end">
+        <button className="btn btn--primary" ref={doneRef} onClick={() => vscode.postMessage({ type: 'close' })}>
+          Back to coding
         </button>
-        <span className="chal-hint">Back to what you were doing.</span>
-      </div>
-    </div>
+      </footer>
+    </section>
   );
 }

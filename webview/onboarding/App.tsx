@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { getVsCodeApi } from '../shared/vscodeApi';
 import type { OnboardingToExtensionMessage } from '../shared/messages';
-import { Chip, RadioOption } from '../shared/Controls';
-import { IconArrowRight, IconAura, IconCheck, IconClock, IconLayers, IconShield } from '../shared/Icons';
+import { Chip, ChoiceRow } from '../shared/Controls';
 
 const vscode = getVsCodeApi<OnboardingToExtensionMessage>();
 
@@ -10,11 +9,11 @@ const ALL_CATEGORIES = ['recall', 'reasoning', 'debugging', 'architecture', 'tes
 
 type Interval = '10min' | '30min' | '1hour' | 'adaptive';
 
-const INTERVALS: { value: Interval; label: string; hint?: string }[] = [
-  { value: '10min', label: '10 minutes', hint: 'Tight loop — best for short focused sessions.' },
-  { value: '30min', label: '30 minutes', hint: 'A good default.' },
-  { value: '1hour', label: '1 hour', hint: 'Light touch.' },
-  { value: 'adaptive', label: 'Adaptive', hint: 'Codora picks the gap from how you score.' },
+const INTERVALS: { value: Interval; label: string; hint: string }[] = [
+  { value: '10min', label: 'Every 10 minutes', hint: 'Best for short, focused sessions.' },
+  { value: '30min', label: 'Every 30 minutes', hint: 'Most people start here.' },
+  { value: '1hour', label: 'Every hour', hint: 'A light touch.' },
+  { value: 'adaptive', label: 'Adaptive', hint: 'Codora sets the gap from how you score.' },
 ];
 
 export function App(): JSX.Element {
@@ -30,74 +29,60 @@ export function App(): JSX.Element {
   };
 
   return (
-    <div className="onb c-enter">
-      <div className="onb-mark">
-        <IconAura size={24} strokeWidth={1.7} />
-      </div>
-
-      <h1 className="onb-title">Codora</h1>
-      <p className="onb-tagline">
-        Increase your aura by knowing what you code. Codora periodically challenges your
-        understanding of the code you're building.
+    <div className="onb">
+      <p className="onb-wordmark">Codora</p>
+      <h1 className="verdict onb-verdict">Know the code you ship.</h1>
+      <p className="muted onb-lede">
+        Every so often, Codora asks one short question about code you just worked on. Your aura is the reading of
+        how well you know it, whether you wrote the code or an AI did.
       </p>
-      <div className="onb-claim">
-        <IconCheck size={14} />
-        AI is allowed. Not understanding your code isn't.
-      </div>
 
-      <section className="onb-card">
-        <div className="onb-card-title c-label">
-          <IconClock size={13} />
-          Challenge frequency
-        </div>
-        <p className="onb-card-hint">Measured in active coding time, not wall-clock time.</p>
-        <div className="onb-options">
-          {INTERVALS.map((opt) => (
-            <RadioOption
-              key={opt.value}
-              name="interval"
-              label={opt.label}
-              description={opt.hint}
-              checked={interval === opt.value}
-              onChange={() => setInterval_(opt.value)}
-            />
-          ))}
-        </div>
-      </section>
+      <ol className="onb-steps">
+        <li className="onb-step">
+          <span className="onb-num">1</span>
+          <div className="onb-step-body">
+            <h2 className="onb-step-title">How often should Codora ask?</h2>
+            <p className="muted onb-step-note">Counted in active coding time, so breaks don't count.</p>
+            <div className="rows">
+              {INTERVALS.map((opt) => (
+                <ChoiceRow
+                  key={opt.value}
+                  name="interval"
+                  label={opt.label}
+                  description={opt.hint}
+                  checked={interval === opt.value}
+                  onChange={() => setInterval_(opt.value)}
+                />
+              ))}
+            </div>
+          </div>
+        </li>
 
-      <section className="onb-card">
-        <div className="onb-card-title c-label">
-          <IconLayers size={13} />
-          Challenge categories
-        </div>
-        <p className="onb-card-hint">You can change any of this later in settings.</p>
-        <div className="set-chips">
-          {ALL_CATEGORIES.map((c) => (
-            <Chip key={c} label={c} checked={categories.includes(c)} onChange={() => toggle(c)} />
-          ))}
-        </div>
-      </section>
+        <li className="onb-step">
+          <span className="onb-num">2</span>
+          <div className="onb-step-body">
+            <h2 className="onb-step-title">What should it ask about?</h2>
+            <p className={`onb-step-note ${categories.length === 0 ? 'tone-warning' : 'muted'}`}>
+              {categories.length === 0 ? 'Pick at least one topic to continue.' : 'You can change any of this later in Settings.'}
+            </p>
+            <div className="chips">
+              {ALL_CATEGORIES.map((c) => (
+                <Chip key={c} label={c} checked={categories.includes(c)} onChange={() => toggle(c)} />
+              ))}
+            </div>
+          </div>
+        </li>
+      </ol>
 
-      <div className="onb-privacy">
-        <span className="onb-privacy-icon">
-          <IconShield size={15} />
-        </span>
-        <span>
-          Your code stays on your machine by default. Codora does not upload your repository
-          or source code without your explicit permission.
-        </span>
-      </div>
+      <p className="callout onb-privacy">
+        Your scores and history stay on this machine. To write a question, Codora sends one short snippet of recent
+        code to the model you choose, never your whole repository. Written answers go to the same model to be graded.
+      </p>
 
       <div className="onb-foot">
-        <button className="c-btn" onClick={start} disabled={categories.length === 0}>
+        <button className="btn btn--primary" onClick={start} disabled={categories.length === 0}>
           Start Codora
-          <IconArrowRight size={13} />
         </button>
-        <span className="c-muted" style={{ fontSize: 11.5 }}>
-          {categories.length === 0
-            ? 'Pick at least one category to continue.'
-            : `${categories.length} categor${categories.length === 1 ? 'y' : 'ies'} enabled`}
-        </span>
       </div>
     </div>
   );

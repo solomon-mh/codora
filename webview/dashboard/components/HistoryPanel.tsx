@@ -1,123 +1,107 @@
 import { useState } from 'react';
 import type { HistoryItem } from '../../shared/messages';
-import {
-  IconCheck,
-  IconChevronDown,
-  IconFile,
-  IconHistory,
-  IconXCircle,
-} from '../../shared/Icons';
+import { IconChevronDown } from '../../shared/Icons';
 import { ModelBadge } from '../../shared/ModelBadge';
+import { Block } from '../../shared/Report';
 
-export function HistoryPanel({ history }: { history: HistoryItem[] }): JSX.Element {
+export function HistoryPanel({
+  history,
+  onStartChallenge,
+}: {
+  history: HistoryItem[];
+  onStartChallenge: () => void;
+}): JSX.Element {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (history.length === 0) {
     return (
-      <section className="panel">
-        <div className="c-empty">
-          <span className="c-empty-icon">
-            <IconHistory size={18} />
-          </span>
-          No challenges answered yet. Once you answer one, it shows up here with the
-          feedback and the files it came from.
-        </div>
+      <section className="hero">
+        <h1 className="verdict hero-verdict">Nothing answered yet.</h1>
+        <p className="muted hero-lede">Each challenge you answer is kept here, with its feedback and the files it came from.</p>
+        <button className="btn btn--primary hero-cta" onClick={onStartChallenge}>
+          Take a challenge
+        </button>
       </section>
     );
   }
 
+  const correct = history.filter((h) => h.correct).length;
+
   return (
-    <div className="hist">
-      {history.map((item) => {
-        const open = openId === item.questionId;
-        return (
-          <article className={`hist-item${open ? ' is-open' : ''}`} key={item.questionId}>
-            <button
-              className="hist-btn"
-              aria-expanded={open}
-              onClick={() => setOpenId(open ? null : item.questionId)}
-            >
-              <span className={`hist-status ${item.correct ? 'is-correct' : 'is-missed'}`}>
-                {item.correct ? <IconCheck size={14} strokeWidth={2.4} /> : <IconXCircle size={14} />}
-              </span>
-
-              <span className="hist-main">
-                <span className="hist-meta">
-                  <span
-                    className="c-num"
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: item.correct ? 'var(--good)' : 'var(--critical)',
-                    }}
-                  >
-                    {Math.round(item.scorePct)}%
+    <Block title="Answered" count={history.length} note={`${correct} correct, newest first. Open one to see the feedback.`}>
+      <ol className="rows">
+        {history.map((item) => {
+          const open = openId === item.questionId;
+          return (
+            <li className={`hist-item${open ? ' is-open' : ''}`} key={item.questionId}>
+              <button className="row hist-row" aria-expanded={open} onClick={() => setOpenId(open ? null : item.questionId)}>
+                <span className="row-text">
+                  <span className="meta hist-meta">
+                    <span className={`sev ${item.correct ? 'tone-good' : 'tone-critical'}`}>
+                      {item.correct ? 'Correct' : 'Missed'}
+                    </span>
+                    <span className="cap">{item.category}</span>
+                    <span className="cap">{item.difficulty}</span>
+                    {item.generatedBy === 'ai' && <ModelBadge generator={item.generator} size={11} />}
+                    <span className="faint">{item.timestampLabel}</span>
                   </span>
-                  <span className="c-pill" style={{ textTransform: 'capitalize' }}>{item.category}</span>
-                  <span className="c-pill" style={{ textTransform: 'capitalize' }}>{item.difficulty}</span>
-                  {item.generatedBy === 'ai' && <ModelBadge generator={item.generator} />}
-                  <span className="c-muted" style={{ fontSize: 11, marginLeft: 'auto' }}>
-                    {item.timestampLabel}
-                  </span>
+                  <span className="hist-prompt">{item.prompt}</span>
                 </span>
-                <span className="hist-prompt">{item.prompt}</span>
-              </span>
+                <span className={`hist-score mono ${item.correct ? 'tone-good' : 'tone-critical'}`}>
+                  {Math.round(item.scorePct)}%
+                </span>
+                <IconChevronDown size={14} className="hist-chevron" />
+              </button>
 
-              <IconChevronDown size={15} className="hist-chevron" />
-            </button>
-
-            {open && (
-              <div className="hist-detail">
-                {item.answerText && (
-                  <div className="hist-detail-block">
-                    <div className="c-label" style={{ marginBottom: 5 }}>Your answer</div>
-                    {item.answerText}
-                  </div>
-                )}
-
-                <div className="hist-detail-block">
-                  <div className="c-label" style={{ marginBottom: 5 }}>Feedback</div>
-                  {item.feedback}
+              {open && (
+                <div className="hist-detail">
+                  {item.sourceFiles.length > 0 && (
+                    <p className="code hist-files">{item.sourceFiles.join('   ')}</p>
+                  )}
+                  {item.answerText && (
+                    <p>
+                      <strong>Your answer. </strong>
+                      <span className="muted">{item.answerText}</span>
+                    </p>
+                  )}
+                  <p>
+                    <strong>Why. </strong>
+                    {item.feedback}
+                  </p>
+                  {(item.strengths.length > 0 || item.gaps.length > 0) && (
+                    <div className="hist-split">
+                      <div>
+                        <h3 className="hist-split-title">What you got right</h3>
+                        {item.strengths.length > 0 ? (
+                          <ul className="bullets">
+                            {item.strengths.map((s) => (
+                              <li key={s}>{s}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="faint">Nothing this time.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="hist-split-title">Worth another look</h3>
+                        {item.gaps.length > 0 ? (
+                          <ul className="bullets">
+                            {item.gaps.map((g) => (
+                              <li key={g}>{g}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="faint">Nothing to revisit.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {item.strengths.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    {item.strengths.map((s) => (
-                      <div key={s} style={{ display: 'flex', gap: 7, padding: '3px 0', color: 'var(--good)' }}>
-                        <IconCheck size={13} strokeWidth={2.2} />
-                        <span style={{ color: 'var(--fg-secondary)' }}>{s}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {item.gaps.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    {item.gaps.map((g) => (
-                      <div key={g} className="c-muted" style={{ display: 'flex', gap: 7, padding: '3px 0' }}>
-                        <span style={{ color: 'var(--warn)' }}>·</span>
-                        <span>{g}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {item.sourceFiles.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span className="c-label">From</span>
-                    {item.sourceFiles.map((f) => (
-                      <span className="hist-file" key={f}>
-                        <IconFile size={11} />
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </article>
-        );
-      })}
-    </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </Block>
   );
 }
