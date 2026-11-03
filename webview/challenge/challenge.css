@@ -1,255 +1,351 @@
 /*
- * Challenge panel: one question, centered, in a single column. Everything here
- * is sized so the question itself is the largest thing on screen and the
- * supporting metadata stays quiet.
+ * Challenge panel, set like an entry in traceOn's fix plan: meta line, the
+ * question as the verdict, the code as an inset exhibit, answers as ruled
+ * numbered rows. The result opens under a full ink rule.
  */
 
 .chal {
-  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 26px 24px 40px;
+  padding: var(--sp-8) var(--sp-6) var(--sp-12);
 }
 
-.chal-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
+.chal-meta {
+  margin-bottom: var(--sp-3);
 }
 
-.chal-mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--accent-grad);
-  color: var(--accent-ink);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-
-.chal-head-name {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.chal-head-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-.chal-prompt {
-  margin: 0 0 10px;
-  font-size: 18px;
-  font-weight: 550;
-  line-height: 1.45;
+/* The question reads first, but it's a sentence to read, not a headline to shout. */
+.chal-question {
+  max-width: 40ch;
+  font-size: 19px;
+  line-height: 1.3;
   letter-spacing: -0.015em;
 }
 
 .chal-reason {
+  max-width: 68ch;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+/* ---------- Code exhibit ---------- */
+
+.chal-code {
+  margin: var(--sp-6) 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.chal-code-head {
   display: flex;
-  gap: 7px;
-  margin: 0 0 22px;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--fg-muted);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-label);
+  color: var(--text-muted);
 }
 
-.chal-reason-icon {
-  flex: none;
-  margin-top: 2px;
-  color: var(--fg-faint);
+.chal-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chal-options {
+.chal-code-body {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px 14px;
+  color: var(--text);
+  font-family: var(--font-code);
+  font-size: var(--code-size);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.chal-code-loading {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 22px;
+  gap: 10px;
+  padding: 14px;
 }
 
-/* Option rows carry real prose, so they align to the top and wrap. */
-.chal-option {
+/* ---------- Answers ---------- */
+
+/*
+ * Answers are choices: each one a box with a radio, so it reads as "pick
+ * one" at a glance. Hover lifts the edge; the chosen box takes the Signal
+ * Blue edge and a filled radio. No colour or motion on keyboard picks
+ * beyond the state change itself.
+ */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
+}
+
+.choice {
+  position: relative;
+  display: flex;
   align-items: flex-start;
-  padding: 13px 14px;
+  gap: var(--sp-3);
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 100ms var(--ease-out);
+}
+
+.choice:active:not(:has(:disabled)) {
+  transform: scale(0.995);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .choice:hover:not(:has(:disabled)) {
+    border-color: var(--text-muted);
+    background: var(--surface);
+  }
+}
+
+.choice:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choice-radio {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.choice-radio::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.choice-text {
+  flex: 1;
+  min-width: 0;
   line-height: 1.5;
 }
 
-.chal-option .c-radio {
-  margin-top: 1px;
+/* Chosen, before checking. */
+.choice:has(:checked):not(.is-right):not(.is-wrong) {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
 }
 
-.chal-actions {
+.choice:has(:checked) .choice-radio {
+  border-color: var(--accent);
+}
+
+.choice:has(:checked) .choice-radio::after {
+  background: var(--accent);
+}
+
+/* After checking: the answer in green, a wrong pick in red, the rest step back. */
+.choice.is-right,
+.choice.is-wrong,
+.choice.is-faded {
+  cursor: default;
+}
+
+.choice.is-right {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.choice.is-right .choice-radio {
+  border-color: var(--good);
+}
+
+.choice.is-right .choice-radio::after {
+  background: var(--good);
+}
+
+.choice.is-wrong {
+  border-color: var(--critical);
+  background: var(--critical-bg);
+}
+
+.choice.is-wrong .choice-radio {
+  border-color: var(--critical);
+}
+
+.choice.is-wrong .choice-radio::after {
+  background: var(--critical);
+}
+
+.choice.is-faded {
+  color: var(--text-faint);
+  border-color: var(--border);
+}
+
+.choice .sev {
+  flex: none;
+  margin-top: 2px;
+}
+
+.chal-free {
+  position: relative;
+  margin-top: var(--sp-6);
+}
+
+.chal-count {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: var(--fs-micro);
+  pointer-events: none;
+}
+
+/* ---------- Footer ---------- */
+
+.chal-foot {
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: space-between;
   flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
 }
 
-.chal-counter {
-  margin-top: 6px;
-  text-align: right;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--fg-faint);
+.chal-foot-end {
+  justify-content: flex-end;
+}
+
+.chal-foot-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
 }
 
 .chal-hint {
-  font-size: 11.5px;
-  color: var(--fg-faint);
+  font-size: var(--fs-label);
+}
+
+.chal-setup {
+  margin-top: var(--sp-6);
+}
+
+.chal-setup-icon {
+  flex: none;
+  display: flex;
+  width: 28px;
+  color: var(--text-muted);
 }
 
 /* ---------- Result ---------- */
 
+@keyframes result-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.chal-result {
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--text);
+  animation: result-in var(--dur-med) var(--ease-out) both;
+}
+
 .chal-result-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--border);
-  background: var(--surface-1);
-  margin-bottom: 14px;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
 }
 
-.chal-result-head.is-correct {
-  border-color: rgba(63, 208, 127, 0.3);
-  background: linear-gradient(180deg, var(--good-soft), transparent);
+.chal-figures {
+  display: flex;
+  gap: var(--sp-6);
 }
 
-.chal-result-head.is-missed {
-  border-color: rgba(245, 181, 68, 0.28);
-  background: linear-gradient(180deg, var(--warn-soft), transparent);
-}
-
-.chal-result-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-}
-
-.chal-result-icon.is-correct {
-  background: var(--good-soft);
-  color: var(--good);
-}
-
-.chal-result-icon.is-missed {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-
-.chal-result-title {
-  font-size: 16px;
+.chal-figures dt {
+  font-size: var(--fs-label);
   font-weight: 600;
-  letter-spacing: -0.015em;
 }
 
-.chal-block {
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface-1);
-  font-size: 13px;
-  line-height: 1.6;
-  margin-bottom: 12px;
+.chal-figures dd {
+  font-size: var(--fs-metric);
+  font-stretch: var(--wide);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-.chal-list-row {
-  display: flex;
-  gap: 9px;
-  padding: 5px 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+.chal-said,
+.chal-feedback {
+  max-width: 68ch;
+  margin-top: var(--sp-4);
 }
 
-.chal-list-icon {
-  flex: none;
-  margin-top: 2px;
-}
-
-/* ---------- Unavailable / setup ---------- */
-
-.chal-setup-btn {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 11px 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--fg);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
-}
-
-.chal-setup-btn:hover {
-  background: var(--surface-3);
-  border-color: var(--accent-ring);
-}
-
-.chal-setup-btn:hover .chal-setup-arrow {
-  color: var(--accent);
-  transform: translateX(2px);
-}
-
-.chal-setup-arrow {
-  margin-left: auto;
-  flex: none;
-  color: var(--fg-faint);
-  transition: color 0.16s var(--ease), transform 0.16s var(--ease);
-}
-
-.chal-setup-icon {
+.chal-split {
   display: grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  background: var(--surface-3);
-  color: var(--fg-secondary);
+  grid-template-columns: 1fr 1fr;
+  margin-top: var(--sp-5);
+  border-top: 1px dashed var(--border-strong);
+  border-bottom: 1px dashed var(--border-strong);
 }
 
-.chal-detail {
-  white-space: pre-wrap;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--fg-secondary);
+.chal-split > div {
+  padding: var(--sp-3) var(--sp-4) var(--sp-4) 0;
 }
 
-/* ---------- Loading ---------- */
+.chal-split > div + div {
+  padding-left: var(--sp-4);
+  border-left: 1px solid var(--border);
+}
 
-.chal-loading {
+.chal-split-title {
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.bullets {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 26px 24px;
-  color: var(--fg-muted);
-  font-size: 13px;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: var(--fs-sm);
 }
 
-.chal-spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--surface-3);
-  border-top-color: var(--accent);
-  animation: chal-spin 0.7s linear infinite;
-}
+@media (max-width: 520px) {
+  .chal {
+    padding: var(--sp-5) var(--sp-4) var(--sp-8);
+  }
 
-@keyframes chal-spin {
-  to {
-    transform: rotate(360deg);
+  .chal-split {
+    grid-template-columns: 1fr;
+  }
+
+  .chal-split > div + div {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--border);
   }
 }

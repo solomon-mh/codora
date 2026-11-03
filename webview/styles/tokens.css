@@ -1,102 +1,162 @@
-/*
- * Codora design system.
- *
- * Codora paints its own dark surface rather than inheriting the VS Code theme
- * colors: the panels are a product surface (dashboard, challenge, onboarding)
- * with their own hierarchy, and theme variables gave us neither a stable card
- * elevation nor a usable accent. Chart colors are the validated set — the
- * bar/ring mark (--accent-mark) sits inside the dark lightness band and clears
- * 3:1 on --surface-1, and every ink below clears AA body contrast on all three
- * surfaces (--fg-faint is decorative/large-only at 3.7:1).
- */
+/* ============================================================================
+   Codora design foundations — "Calibrated" (shared with traceOn)
+   ----------------------------------------------------------------------------
+   Codora is a reading of how well you know your code, set like a printed
+   instrument report: ink on calibrated paper.
 
-:root {
-  color-scheme: dark;
+   1. Colour is reserved for evidence. The interface itself is ink on paper.
+      Green, amber, orange and red appear only when they report a finding.
+      Primary actions are solid ink, not a brand fill.
+   2. One signal hue — Signal Blue — is the pointer: focus, selection, the
+      measured marker, "today". It never fills a surface and never decorates.
+   3. Width is hierarchy. One family, Archivo, set wide for what is read
+      first (verdicts, titles, the score) and at normal width for everything
+      read through. Labels are sentence case; nothing is tracked capitals.
+   4. Radii are chosen by what a thing is: 2px chips, 3px controls, 4px
+      sheets. Rulers and readings are square because they are printed.
 
-  /* Surfaces, lightest-on-top elevation. */
-  --bg: #0d0d0f;
-  --surface-1: #16161a;
-  --surface-2: #1d1d22;
-  --surface-3: #24242b;
-  --surface-inset: #111114;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.13);
+   Paper is the light theme, Carbon the dark one; VS Code's theme kind picks.
+   VS Code also injects a default stylesheet into every webview (in an
+   @layer), so its `code`/`kbd` styles are reset below.
+   ========================================================================== */
 
-  /* Ink. */
-  --fg: #f4f4f5;
-  --fg-secondary: #a1a1aa;
-  --fg-muted: #8b8b94;
-  --fg-faint: #71717a;
-
-  /*
-   * Brand accent, in two jobs that need different steps of one hue (244°):
-   *
-   *  --accent      pale brand tint, for ink and UI edges. 10.2-11.8:1 on every
-   *                surface below, so it is safe for small text.
-   *  --accent-ink  text that sits ON a filled accent surface (10.7:1 on the
-   *                button fill) — the pale fill needs dark type, not white.
-   *  --accent-mark chart fills. The pale tint fails the dark-mode mark gates
-   *                (L 0.835, chroma 0.047), so marks use a deeper step:
-   *                L 0.62 / C 0.12, inside the 0.48-0.67 band at 5.0:1.
-   *
-   * Blue rather than a mint/teal brand: the reserved "correct" green sits at
-   * hue 154°, and a mint accent landed 13° away from it — ΔE 9.1 under normal
-   * vision, below the 15 floor. In an app that marks answers right or wrong on
-   * every screen, the brand color must not be mistakable for the pass color.
-   * This hue measures ΔE 25 against it.
-   */
-  --accent: #b0cde6;
-  --accent-ink: #0b1a25;
-  --accent-mark: #3d8dc9;
-  /* Buttons and brand marks: the pale tint. */
-  --accent-grad: linear-gradient(180deg, #bfd8ed 0%, #91b4d2 100%);
-  /* Data fills: the deeper in-band step. Vertical for bars, horizontal for meters. */
-  --mark-grad: linear-gradient(180deg, #6cabdf 0%, #3d8dc9 100%);
-  --mark-grad-h: linear-gradient(90deg, #3d8dc9 0%, #6cabdf 100%);
-  --accent-soft: rgba(176, 205, 230, 0.15);
-  --accent-softer: rgba(176, 205, 230, 0.08);
-  --accent-ring: rgba(176, 205, 230, 0.42);
-
-  /*
-   * Streak. A flame reads orange, and a run of days is its own signal rather
-   * than brand identity — so the streak keeps the warm accent the brand gave
-   * up, which also stops it competing with --accent for attention.
-   * 8.0-8.6:1 on every surface. It sits ΔE 8.9 from --warn under normal
-   * vision, so neither may ever be color-alone: the streak always ships with
-   * the flame icon and the words "day streak".
-   */
-  --streak: #ff8f3d;
-  --streak-soft: rgba(255, 143, 61, 0.14);
-
-  /* Reserved status colors — never reused as a series color. */
-  --good: #3fd07f;
-  --good-soft: rgba(63, 208, 127, 0.14);
-  --critical: #ff6b61;
-  --critical-soft: rgba(255, 107, 97, 0.14);
-  --warn: #f5b544;
-  --warn-soft: rgba(245, 181, 68, 0.14);
-
-  /* Geometry. */
-  --r-xl: 18px;
-  --r-lg: 14px;
-  --r-md: 10px;
-  --r-sm: 7px;
-  --r-pill: 999px;
-
-  /* Type. */
-  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace);
-
-  /* Elevation. */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
-  --shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
-
-  --ease: cubic-bezier(0.32, 0.72, 0, 1);
-
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("../../media/fonts/Archivo-Latin.woff2") format("woff2-variations");
 }
 
-* {
+/* ---- Carbon (dark) — the default, since most editors run dark ---------- */
+body {
+  color-scheme: dark;
+  --bg: #121412;
+  --surface: #191b19;
+  --surface-2: #212421;
+  --surface-3: #292c29;
+  --border: #2c302c;
+  --border-strong: #3f443e;
+  --text: #e8eae4;
+  --text-muted: #a8aea5;
+  --text-faint: #8a9188;
+  --text-disabled: #5d635b;
+  --primary: #e8eae4;
+  --primary-hover: #ffffff;
+  --on-primary: #121412;
+  --accent: #91a3ff;
+  --accent-bg: #1e2342;
+  --accent-subtle: #191d33;
+  --accent-line: #3b4683;
+  --good: #6bc98c;
+  --good-bg: #1b2a1f;
+  --warning: #e0b458;
+  --warning-bg: #2b2617;
+  --high: #ec9a5d;
+  --critical: #f2737c;
+  --critical-bg: #2f1c1f;
+  --good-mark: #6bc98c;
+  --warning-mark: #e0b458;
+  --high-mark: #ec9a5d;
+  --critical-mark: #f2737c;
+  --trace-track: #262926;
+  --trace-tick: #4a4f48;
+  --graph-paper: #151a16;
+  --graph-minor: rgb(150 200 165 / 0.05);
+  --graph-major: rgb(150 200 165 / 0.11);
+  --shadow-pop: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 16px 40px -8px rgb(0 0 0 / 0.6);
+}
+
+/* ---- Paper (light) ------------------------------------------------------ */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  color-scheme: light;
+  --bg: #fafaf7;
+  --surface: #f2f3ee;
+  --surface-2: #eaece6;
+  --surface-3: #e0e3dc;
+  --border: #d8dcd3;
+  --border-strong: #b9bfb4;
+  --text: #11161c;
+  --text-muted: #46505a;
+  --text-faint: #5a646e;
+  --text-disabled: #9aa199;
+  --primary: #11161c;
+  --primary-hover: #262e37;
+  --on-primary: #fafaf7;
+  --accent: #2443e0;
+  --accent-bg: #e5e9fc;
+  --accent-subtle: #eef0fb;
+  --accent-line: #b6c1f5;
+  --good: #1c7544;
+  --good-bg: #e1efe5;
+  --warning: #875a00;
+  --warning-bg: #f5ebd2;
+  --high: #aa470b;
+  --critical: #bf2336;
+  --critical-bg: #f8e0e2;
+  --good-mark: #2a9d5c;
+  --warning-mark: #dea01c;
+  --high-mark: #e06d1f;
+  --critical-mark: #d8334a;
+  --trace-track: #e3e6df;
+  --trace-tick: #b3b9ad;
+  --graph-paper: #edf1ea;
+  --graph-minor: rgb(52 98 70 / 0.075);
+  --graph-major: rgb(52 98 70 / 0.16);
+  --shadow-pop: 0 1px 2px rgb(17 22 28 / 0.08), 0 12px 32px -8px rgb(17 22 28 / 0.18);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --border: var(--vscode-contrastBorder, currentColor);
+  --border-strong: var(--vscode-contrastBorder, currentColor);
+}
+
+body {
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 4px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  --fs-hero: 76px;
+  --fs-display: 34px;
+  --fs-verdict: 24px;
+  --fs-metric: 21px;
+  --fs-lg: 17px;
+  --fs-title: 15px;
+  --fs-body: 14px;
+  --fs-sm: 13px;
+  --fs-label: 12px;
+  --fs-micro: 11px;
+  --lh-tight: 1.2;
+  --lh-body: 1.55;
+  --wide: 118%;
+  --wider: 125%;
+
+  --dur-fast: 140ms;
+  --dur-med: 220ms;
+  --dur-draw: 900ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --code-size: var(--vscode-editor-font-size, 13px);
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -109,250 +169,697 @@ body {
   margin: 0;
   padding: 0;
   background: var(--bg);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: 13px;
-  line-height: 1.5;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-::selection {
-  background: var(--accent-soft);
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl,
+dd {
+  margin: 0;
 }
 
-/* ---------- Scrollbars ---------- */
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--surface-3) transparent;
+ul,
+ol {
+  padding: 0;
+  list-style: none;
 }
 
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+button {
+  font: inherit;
+  color: inherit;
 }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
+/* Undo VS Code's injected inline-code style inside code blocks. */
+pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
 }
-
-*::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border: 2px solid transparent;
-  background-clip: content-box;
-  border-radius: var(--r-pill);
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: #33333c;
-  background-clip: content-box;
-}
-
-/* ---------- Focus ---------- */
 
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: var(--r-sm);
 }
 
-/* ---------- Type utilities ---------- */
-
-.c-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
+::selection {
+  background: var(--accent-bg);
 }
 
-.c-muted {
-  color: var(--fg-muted);
-}
+/* ---------- Type ---------- */
 
-.c-secondary {
-  color: var(--fg-secondary);
-}
-
-.c-num {
-  font-family: var(--font-mono);
+.mono {
   font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+.cap {
+  text-transform: capitalize;
+}
+
+.code {
+  font-family: var(--font-code);
+}
+
+/* The verdict: the sentence read first. */
+.verdict {
+  font-size: var(--fs-display);
+  font-stretch: var(--wide);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.verdict-sm {
+  font-size: var(--fs-verdict);
+  font-stretch: var(--wide);
+  font-weight: 700;
+  line-height: 1.18;
   letter-spacing: -0.02em;
+  text-wrap: pretty;
 }
 
-.c-title {
-  font-size: 13px;
+/* Meta line: items set apart by space, not by dots. */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  font-size: var(--fs-label);
   font-weight: 600;
-  color: var(--fg);
+  color: var(--text-muted);
 }
 
-/* ---------- Surfaces ---------- */
-
-.c-card {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 16px;
+.meta-strong {
+  color: var(--text);
 }
 
-.c-card-lg {
-  padding: 20px;
+/* The score reading. */
+.reading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-/* A card that reacts to the pointer — only for cards that do something. */
-.c-card-interactive {
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), transform 0.16s var(--ease);
+.reading-value {
+  font-size: var(--fs-hero);
+  font-stretch: var(--wider);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
 }
 
-.c-card-interactive:hover {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.c-divider {
-  height: 1px;
-  background: var(--border);
-  border: none;
-  margin: 0;
+.reading-of {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text-faint);
 }
 
 /* ---------- Buttons ---------- */
 
-.c-btn {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
-  background: var(--accent-grad);
-  color: var(--accent-ink);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: filter 0.16s var(--ease), transform 0.12s var(--ease), box-shadow 0.16s var(--ease);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, var(--shadow-1);
-}
-
-.c-btn:hover {
-  filter: brightness(1.08);
-}
-
-.c-btn:active {
-  transform: translateY(1px);
-}
-
-.c-btn:disabled {
-  background: var(--surface-3);
-  color: var(--fg-faint);
-  box-shadow: none;
-  cursor: not-allowed;
-  filter: none;
-}
-
-.c-btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  gap: var(--sp-2);
   height: 34px;
   padding: 0 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--fg);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform 100ms var(--ease-out);
 }
 
-.c-btn-ghost:hover {
-  background: var(--surface-3);
-  border-color: rgba(255, 255, 255, 0.2);
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
-.c-btn-ghost:active {
-  transform: translateY(1px);
+.btn:disabled {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-disabled);
+  cursor: default;
 }
 
-.c-btn-danger:hover {
-  border-color: var(--critical);
+.btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn--danger {
   color: var(--critical);
-  background: var(--critical-soft);
 }
 
-.c-btn-sm {
+.btn--sm {
   height: 28px;
   padding: 0 10px;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
 }
 
-.c-btn-block {
+.btn--block {
   width: 100%;
 }
 
-/* ---------- Icon button ---------- */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
 
-.c-icon-btn {
+  .btn--primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+  }
+
+  .btn--danger:hover:not(:disabled) {
+    background: var(--critical-bg);
+    border-color: var(--critical);
+  }
+}
+
+/* ---------- Tabs ---------- */
+
+.tabs {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+
+.tab {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
+  gap: var(--sp-2);
+  height: 28px;
+  padding: 0 var(--sp-3);
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
+  border-radius: 6px;
   background: transparent;
-  color: var(--fg-muted);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 
-.c-icon-btn:hover {
+.tab[aria-selected="true"] {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 650;
+}
+
+.tab-count {
+  font-size: var(--fs-micro);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover {
+    color: var(--text);
+  }
+}
+
+/* ---------- Report block: ink rule, title in the margin, evidence beside ---------- */
+
+.rblock {
+  container-type: inline-size;
+}
+
+.rblock__grid {
+  border-top: 1px solid var(--text);
+  padding-top: var(--sp-4);
+}
+
+.rblock__margin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-5);
+  min-width: 0;
+}
+
+.rblock__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: 19px;
+  font-stretch: var(--wide);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.rblock__count {
+  font-size: var(--fs-sm);
+  font-stretch: 100%;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.rblock__note {
+  max-width: 34ch;
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.rblock__body {
+  min-width: 0;
+}
+
+@container (min-width: 620px) {
+  .rblock__grid {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    column-gap: var(--sp-8);
+  }
+
+  .rblock__margin {
+    margin-bottom: 0;
+  }
+}
+
+/* ---------- Measure list: label / value rows on shared baselines ---------- */
+
+.measures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: var(--sp-6);
+}
+
+.measure {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.measure-label {
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.measure-value {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Evidence tones (text) and severity squares ---------- */
+
+.tone-good {
+  color: var(--good);
+}
+
+.tone-warning {
+  color: var(--warning);
+}
+
+.tone-high {
+  color: var(--high);
+}
+
+.tone-critical {
+  color: var(--critical);
+}
+
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.sev::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+}
+
+/* ---------- Score scale ---------- */
+
+.scale {
+  position: relative;
+}
+
+.scale-track {
+  position: relative;
+  background: var(--trace-track);
+}
+
+.scale-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.scale-boundary {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: var(--bg);
+  opacity: 0.9;
+}
+
+.scale-needle {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.scale-needle::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.scale-ticks {
+  position: relative;
+}
+
+.scale-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: var(--trace-tick);
+}
+
+.scale-tick.is-major {
+  background: var(--text-muted);
+}
+
+.scale-num {
+  position: absolute;
+  top: 11px;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.scale-band {
+  position: absolute;
+  top: 30px;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The one orchestrated motion: the reading draws in, the needle travels. */
+@keyframes trace-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes needle-travel {
+  from {
+    left: 0;
+  }
+}
+
+.trace-draw {
+  transform-origin: left center;
+  animation: trace-draw var(--dur-draw) var(--ease-out) both;
+}
+
+.needle-travel {
+  animation: needle-travel var(--dur-draw) var(--ease-out) both;
+}
+
+/* ---------- Rows (choices, toggles, links) ---------- */
+
+.rows {
+  border-top: 1px solid var(--border);
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-hint {
+  display: block;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+
+label.row,
+button.row {
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  label.row:hover,
+  button.row:hover {
+    background: linear-gradient(90deg, var(--surface) 0%, transparent 100%);
+  }
+}
+
+label.row:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sr-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The pen: a dot that marks the chosen row, as the nav marks the current page. */
+.pen {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin: 0 3px 0 2px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  transform: scale(0.85);
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-med) var(--ease-out);
+}
+
+.row:has(:checked) .pen {
+  background: var(--accent);
+  box-shadow: none;
+  transform: scale(1);
+}
+
+.row:has(input[type="radio"]:checked) .row-text {
+  font-weight: 650;
+}
+
+.row-hint {
+  font-weight: 400;
+}
+
+/* ---------- Switch ---------- */
+
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 30px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
   background: var(--surface-2);
-  color: var(--fg);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
-/* ---------- Chips & pills ---------- */
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-sm);
+  background: var(--text-faint);
+  transition: transform var(--dur-med) var(--ease-out), background var(--dur-fast);
+}
+
+.switch:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.switch:checked::after {
+  transform: translateX(14px);
+  background: var(--on-primary);
+}
+
+/* ---------- Chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  text-transform: capitalize;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 100ms var(--ease-out);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+.chip:has(:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-subtle);
+  color: var(--text);
+}
+
+.chip:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chip-tick {
+  display: none;
+  color: var(--accent);
+}
+
+.chip:has(:checked) .chip-tick {
+  display: inline-flex;
+}
+
+/* ---------- Inputs ---------- */
+
+.input,
+.textarea {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.input {
+  height: 28px;
+  padding: 0 8px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+.textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.input:focus,
+.textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------- Callout (dashed, like a note pinned to the report) ---------- */
+
+.callout {
+  padding: 12px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* ---------- Model badge (kept from the previous system's class names) ---------- */
 
 .c-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--fg-secondary);
-  font-size: 11px;
-  font-weight: 500;
+  gap: 4px;
   white-space: nowrap;
 }
 
-.c-pill-accent {
-  background: var(--accent-soft);
-  border-color: rgba(176, 205, 230, 0.28);
-  color: var(--accent);
-}
-
-/*
- * A pill naming the model behind a question. Model names are supplied by
- * whoever published the model (a `vscode.lm` entry can call itself
- * anything at all), so the name is capped and ellipsised rather than
- * allowed to stretch a challenge header or a history row out of shape —
- * the badge's title attribute always carries the full text.
- */
 .c-pill-model {
-  max-width: 168px;
+  max-width: 200px;
 }
 
 .c-pill-model-name {
@@ -361,463 +868,26 @@ body {
   text-overflow: ellipsis;
 }
 
-.c-pill-streak {
-  background: var(--streak-soft);
-  border-color: rgba(255, 143, 61, 0.26);
-  color: var(--streak);
-}
+/* ---------- Loading ---------- */
 
-.c-pill-good {
-  background: var(--good-soft);
-  border-color: rgba(63, 208, 127, 0.25);
-  color: var(--good);
-}
-
-.c-pill-critical {
-  background: var(--critical-soft);
-  border-color: rgba(255, 107, 97, 0.25);
-  color: var(--critical);
-}
-
-/* ---------- Switch ---------- */
-
-.c-switch {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: none;
-  position: relative;
-  width: 34px;
-  height: 20px;
-  margin: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-pill);
-  background: var(--surface-3);
-  cursor: pointer;
-  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
-}
-
-.c-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--fg-muted);
-  transition: transform 0.2s var(--ease), background 0.2s var(--ease);
-}
-
-.c-switch:checked {
-  background: var(--mark-grad-h);
-  border-color: transparent;
-}
-
-.c-switch:checked::after {
-  transform: translateX(14px);
-  background: #fff;
-}
-
-.c-switch:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ---------- Checkbox ---------- */
-
-.c-check {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: none;
-  position: relative;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface-2);
-  cursor: pointer;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
-}
-
-.c-check:hover {
-  border-color: var(--accent);
-}
-
-.c-check:checked {
-  background: var(--accent-mark);
-  border-color: var(--accent-mark);
-}
-
-.c-check:checked::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 1px;
-  width: 5px;
-  height: 9px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-/* ---------- Radio ---------- */
-
-.c-radio {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: none;
-  display: inline-grid;
-  place-content: center;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--surface-2);
-  cursor: pointer;
-  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
-}
-
-.c-radio:hover {
-  border-color: var(--accent);
-}
-
-.c-radio::after {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: scale(0);
-  transition: transform 0.18s var(--ease);
-}
-
-.c-radio:checked {
-  border-color: var(--accent);
-}
-
-.c-radio:checked::after {
-  transform: scale(1);
-}
-
-/* ---------- Option rows (a control wrapped in a selectable card) ---------- */
-
-.c-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  color: var(--fg);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
-}
-
-.c-option:hover {
-  background: var(--surface-3);
-}
-
-/* The pale brand tint carries less punch against the dark ground than a warm
-   accent would, so the selected row takes the stronger fill — on the challenge
-   screen this is how you see which answer you picked. */
-.c-option:has(:checked) {
-  border-color: var(--accent-ring);
-  background: var(--accent-soft);
-}
-
-.c-option-text {
-  flex: 1;
-  min-width: 0;
-}
-
-/* A switch row is a label, not a card — no border, full width. */
-.c-switch-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 0;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.c-switch-row + .c-switch-row {
-  border-top: 1px solid var(--border);
-}
-
-/* ---------- Selectable chip (checkbox as a pill) ---------- */
-
-.c-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  color: var(--fg-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
-}
-
-.c-chip:hover {
-  background: var(--surface-3);
-  color: var(--fg);
-}
-
-.c-chip input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.c-chip:has(:checked) {
-  background: var(--accent-soft);
-  border-color: var(--accent-ring);
-  color: var(--accent);
-}
-
-.c-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--border-strong);
-  transition: background 0.16s var(--ease), box-shadow 0.16s var(--ease);
-}
-
-.c-chip:has(:checked) .c-chip-dot {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.c-chip:has(:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* A wrapping row of chips. Lives here because settings and onboarding
-   are separate bundles and both use it. */
-.set-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-/* ---------- Text inputs ---------- */
-
-.c-input {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface-inset);
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
-}
-
-.c-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-softer);
-}
-
-.c-textarea {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  background: var(--surface-inset);
-  color: var(--fg);
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
-}
-
-.c-textarea::placeholder {
-  color: var(--fg-faint);
-}
-
-.c-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-softer);
-}
-
-/* ---------- Progress / meters ---------- */
-
-.c-meter {
-  height: 6px;
-  border-radius: var(--r-pill);
-  background: var(--surface-3);
-  overflow: hidden;
-}
-
-.c-meter-fill {
-  height: 100%;
-  border-radius: var(--r-pill);
-  background: var(--mark-grad-h);
-  transition: width 0.5s var(--ease);
-}
-
-/* ---------- Streak ---------- */
-
-/* Spacing is per-element rather than a single `gap`: the number sits tight to
-   the flame so the two read as one unit, while the label keeps a word-space.
-   The whole row wears --streak, label included. */
-.c-streak {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: var(--streak);
-}
-
-.c-streak-value {
-  margin-left: 3px;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.c-streak-label {
-  margin-left: 5px;
-}
-
-/* No streak yet: the flame goes cold rather than advertising a zero. */
-.c-streak.is-zero {
-  color: var(--fg-faint);
-}
-
-/* ---------- Motion ---------- */
-
-@keyframes c-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.c-enter {
-  animation: c-fade-up 0.32s var(--ease) both;
-}
-
-@keyframes c-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
+@keyframes pulse {
   50% {
-    opacity: 0.8;
+    opacity: 0.45;
   }
 }
 
-.c-skeleton {
-  border-radius: var(--r-md);
+.skeleton {
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  animation: c-pulse 1.4s ease-in-out infinite;
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0.001ms !important;
   }
-}
-
-/* ---------- Segmented control ---------- */
-
-.c-segmented {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-inset);
-}
-
-.c-segmented-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 11px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.16s var(--ease), color 0.16s var(--ease);
-}
-
-.c-segmented-item:hover {
-  color: var(--fg);
-  background: var(--surface-2);
-}
-
-.c-segmented-item.is-active {
-  background: var(--surface-3);
-  color: var(--fg);
-  box-shadow: var(--shadow-1);
-}
-
-/* ---------- Tooltip (chart hover layer) ---------- */
-
-.c-tooltip {
-  position: absolute;
-  z-index: 5;
-  padding: 5px 9px;
-  border-radius: var(--r-sm);
-  background: #f4f4f5;
-  color: #0d0d0f;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: var(--shadow-pop);
-  transform: translate(-50%, -100%);
-}
-
-/* ---------- Empty state ---------- */
-
-.c-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 28px 20px;
-  text-align: center;
-  color: var(--fg-muted);
-  font-size: 12.5px;
-}
-
-.c-empty-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--fg-faint);
 }

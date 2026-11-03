@@ -1,15 +1,15 @@
 /**
  * Form primitives shared by the settings, onboarding and challenge panels.
  *
- * Each one wraps a real `<input>` (restyled with `appearance: none`) rather
- * than faking the control with divs, so keyboard focus, space/arrow keys and
+ * Each one wraps a real `<input>` (restyled, or visually hidden) rather than
+ * faking the control with divs, so keyboard focus, space/arrow keys and
  * screen-reader semantics keep working for free.
  */
 
 import type { ReactNode } from 'react';
 import { IconCheck } from './Icons';
 
-/** A labelled toggle for a boolean setting. Use for "on/off", never for a choice between options. */
+/** A row with a switch. Use for on/off, never for a choice between options. */
 export function SwitchRow({
   label,
   description,
@@ -22,18 +22,15 @@ export function SwitchRow({
   onChange: (value: boolean) => void;
 }): JSX.Element {
   return (
-    <label className="c-switch-row">
-      <span className="c-option-text">
-        <span style={{ display: 'block' }}>{label}</span>
-        {description && (
-          <span className="c-muted" style={{ display: 'block', fontSize: 11.5, marginTop: 2 }}>
-            {description}
-          </span>
-        )}
+    <label className="row">
+      <span className="row-text">
+        {label}
+        {description && <span className="row-hint">{description}</span>}
       </span>
       <input
         type="checkbox"
-        className="c-switch"
+        role="switch"
+        className="switch"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
@@ -41,7 +38,36 @@ export function SwitchRow({
   );
 }
 
-/** A pill-shaped multi-select item. The dot doubles as the selected indicator. */
+/** A row for one choice among several; the pen marks the chosen one. */
+export function ChoiceRow({
+  name,
+  label,
+  description,
+  checked,
+  onChange,
+  trailing,
+}: {
+  name: string;
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: () => void;
+  trailing?: ReactNode;
+}): JSX.Element {
+  return (
+    <label className="row">
+      <input type="radio" className="sr-input" name={name} checked={checked} onChange={onChange} />
+      <span className="pen" aria-hidden="true" />
+      <span className="row-text">
+        {label}
+        {description && <span className="row-hint">{description}</span>}
+      </span>
+      {trailing}
+    </label>
+  );
+}
+
+/** A multi-select chip. A tick appears when it's on, so state never rests on colour alone. */
 export function Chip({
   label,
   checked,
@@ -52,73 +78,41 @@ export function Chip({
   onChange: (value: boolean) => void;
 }): JSX.Element {
   return (
-    <label className="c-chip" style={{ position: 'relative', textTransform: 'capitalize' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="c-chip-dot" />
+    <label className="chip">
+      <input type="checkbox" className="sr-input" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="chip-tick">
+        <IconCheck size={12} strokeWidth={2.6} />
+      </span>
       {label}
     </label>
   );
 }
 
-/** A single-choice row styled as a selectable card. `trailing` holds an inline sub-control. */
-export function RadioOption({
-  name,
+/** A tab strip: the selected tab sits on the sheet with a hairline edge. */
+export function Tabs<T extends string>({
+  items,
+  active,
+  onChange,
   label,
-  description,
-  checked,
-  onChange,
-  trailing,
-  capitalize,
 }: {
-  name: string;
+  items: { id: T; label: string; count?: number }[];
+  active: T;
+  onChange: (id: T) => void;
   label: string;
-  description?: string;
-  checked: boolean;
-  onChange: () => void;
-  trailing?: ReactNode;
-  /** For bare lowercase tokens ("easy"). Leave off for prose labels — it would
-   *  title-case every word ("10 Minutes"). */
-  capitalize?: boolean;
 }): JSX.Element {
   return (
-    <label className="c-option">
-      <input type="radio" className="c-radio" name={name} checked={checked} onChange={onChange} />
-      <span className="c-option-text">
-        <span style={{ display: 'block', textTransform: capitalize ? 'capitalize' : undefined }}>{label}</span>
-        {description && (
-          <span className="c-muted" style={{ display: 'block', fontSize: 11.5, marginTop: 2 }}>
-            {description}
-          </span>
-        )}
-      </span>
-      {trailing}
-    </label>
-  );
-}
-
-/** A compact horizontal single-choice control, for short option sets. */
-export function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}): JSX.Element {
-  return (
-    <div className="c-segmented" role="radiogroup">
-      {options.map((opt) => (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {items.map((tab) => (
         <button
-          key={opt.value}
+          key={tab.id}
           type="button"
-          role="radio"
-          aria-checked={value === opt.value}
-          className={`c-segmented-item${value === opt.value ? ' is-active' : ''}`}
-          onClick={() => onChange(opt.value)}
+          role="tab"
+          aria-selected={tab.id === active}
+          className="tab"
+          onClick={() => onChange(tab.id)}
         >
-          {value === opt.value && <IconCheck size={12} strokeWidth={2.2} />}
-          {opt.label}
+          {tab.label}
+          {tab.count !== undefined && tab.count > 0 && <span className="tab-count">{tab.count}</span>}
         </button>
       ))}
     </div>

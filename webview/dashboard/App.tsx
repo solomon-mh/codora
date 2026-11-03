@@ -5,16 +5,7 @@ import type {
   DashboardToExtensionMessage,
   ExtensionToDashboardMessage,
 } from '../shared/messages';
-import {
-  IconAura,
-  IconCube,
-  IconFlame,
-  IconGrid,
-  IconHistory,
-  IconPlay,
-  IconSliders,
-} from '../shared/Icons';
-import type { IconProps } from '../shared/Icons';
+import { Tabs } from '../shared/Controls';
 import { AuraCard } from './components/AuraCard';
 import { WeekPanel } from './components/WeekPanel';
 import { InsightsPanel } from './components/InsightsPanel';
@@ -27,18 +18,17 @@ const vscode = getVsCodeApi<DashboardToExtensionMessage>();
 
 type Tab = 'overview' | 'history' | 'project' | 'settings';
 
-const NAV: { id: Tab; label: string; Icon: (p: IconProps) => JSX.Element }[] = [
-  { id: 'overview', label: 'Overview', Icon: IconGrid },
-  { id: 'history', label: 'History', Icon: IconHistory },
-  { id: 'project', label: 'Project', Icon: IconCube },
-  { id: 'settings', label: 'Settings', Icon: IconSliders },
+const NAV: { group: string; items: { id: Tab; label: string }[] }[] = [
+  { group: 'You', items: [{ id: 'overview', label: 'Overview' }, { id: 'history', label: 'History' }] },
+  { group: 'This workspace', items: [{ id: 'project', label: 'Project' }] },
+  { group: 'Preferences', items: [{ id: 'settings', label: 'Settings' }] },
 ];
 
-const TAB_TITLE: Record<Tab, string> = {
-  overview: 'Overview',
-  history: 'History',
-  project: 'Project',
-  settings: 'Settings',
+const CRUMB: Record<Tab, [string, string]> = {
+  overview: ['You', 'Overview'],
+  history: ['You', 'History'],
+  project: ['This workspace', 'Project'],
+  settings: ['Preferences', 'Settings'],
 };
 
 export function App(): JSX.Element {
@@ -54,184 +44,130 @@ export function App(): JSX.Element {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  if (!state) return <LoadingShell />;
-
-  const activeIcon = NAV.find((n) => n.id === tab)?.Icon ?? IconGrid;
-  const ActiveIcon = activeIcon;
+  const startChallenge = () => vscode.postMessage({ type: 'startChallenge' });
+  const historyCount = state?.history.length ?? 0;
 
   return (
     <div className="dash">
       <aside className="dash-rail">
-        <div className="dash-brand">
-          <span className="dash-brand-mark">
-            <IconAura size={17} strokeWidth={1.8} />
-          </span>
-          <span className="dash-brand-name">Codora</span>
-        </div>
-
-        <nav className="dash-nav">
-          {NAV.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              className={`dash-nav-item${tab === id ? ' is-active' : ''}`}
-              onClick={() => setTab(id)}
-            >
-              <Icon size={16} className="dash-nav-icon" />
-              {label}
-              {id === 'history' && state.history.length > 0 && (
-                <span className="dash-nav-count">{state.history.length}</span>
-              )}
-            </button>
+        <div className="dash-wordmark">Codora</div>
+        <nav className="dash-nav" aria-label="Dashboard">
+          {NAV.map((section) => (
+            <div key={section.group} className="dash-nav-group">
+              <p className="dash-nav-label">{section.group}</p>
+              {section.items.map((item) => (
+                <button
+                  key={item.id}
+                  className="nav-item"
+                  aria-current={tab === item.id ? 'page' : undefined}
+                  onClick={() => setTab(item.id)}
+                >
+                  <span className="pen" aria-hidden="true" />
+                  {item.label}
+                  {item.id === 'history' && historyCount > 0 && <span className="nav-count mono">{historyCount}</span>}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
-
-        <div className="dash-rail-spacer" />
-
-        <div className="dash-rail-foot">
-          <div>
-            <div className="c-label" style={{ marginBottom: 6 }}>Aura</div>
-            <div className="dash-rail-aura">
-              <span className="dash-rail-aura-value">
-                {state.hasEnoughData ? Math.round(state.globalAura ?? 0) : '—'}
-              </span>
-              {state.hasEnoughData && <span className="c-muted" style={{ fontSize: 11 }}>/ 100</span>}
-            </div>
-            <div className="c-muted" style={{ fontSize: 11.5, marginTop: 3 }}>
-              {state.hasEnoughData ? state.auraLabel : 'Not enough data yet'}
-            </div>
-          </div>
-
-          <hr className="c-divider" />
-
-          <div className={`c-streak${state.thisWeek.currentStreak > 0 ? '' : ' is-zero'}`}>
-            <IconFlame size={15} />
-            <span className="c-streak-value">{state.thisWeek.currentStreak}</span>
-            <span className="c-streak-label">day streak</span>
-          </div>
-        </div>
+        {state && (
+          <p className="dash-rail-foot">
+            <span className={`dash-streak${state.thisWeek.currentStreak > 0 ? ' is-live' : ''}`} />
+            {state.thisWeek.currentStreak}-day streak
+          </p>
+        )}
       </aside>
 
-      <main className="dash-main">
-        <div className="dash-main-inner">
-          <div className="dash-topbar">
-            <span className="dash-crumb">
-              <ActiveIcon size={15} className="dash-crumb-icon" />
-              {TAB_TITLE[tab]}
-            </span>
-            <span className="dash-topbar-meta">
-              {state.thisWeek.challengesCompleted} challenge
-              {state.thisWeek.challengesCompleted === 1 ? '' : 's'} this week
-            </span>
-            <div className="dash-topbar-actions">
-              <button className="c-btn c-btn-sm" onClick={() => vscode.postMessage({ type: 'startChallenge' })}>
-                <IconPlay size={12} />
-                New challenge
-              </button>
-            </div>
+      <div className="dash-page">
+        <header className="dash-head">
+          <p className="dash-crumb">
+            <span className="muted">{CRUMB[tab][0]}</span>
+            <span className="faint">/</span>
+            <strong>{CRUMB[tab][1]}</strong>
+          </p>
+          <div className="dash-head-right">
+            {state && <span className="dash-project">{state.project.name}</span>}
+            <button className="btn btn--primary" onClick={startChallenge}>
+              Take a challenge
+            </button>
           </div>
+        </header>
 
-          {tab === 'overview' && (
-            <div className="c-enter" key="overview">
-              <h1 className="dash-greeting">{greeting()}</h1>
-              <p className="dash-subgreeting">
-                {state.hasEnoughData
-                  ? `Your aura is ${state.auraLabel.toLowerCase()} across every workspace. You've answered ${
-                      state.project.challenges
-                    } challenge${state.project.challenges === 1 ? '' : 's'} in ${state.project.name}.`
-                  : `Codora is still learning how well you know ${state.project.name}.`}
-              </p>
-
-              <AuraCard
-                aura={state.globalAura}
-                label={state.auraLabel}
-                delta={state.auraDeltaThisWeek}
-                hasEnoughData={state.hasEnoughData}
-                breakdown={state.breakdown}
-                accuracyPct={state.thisWeek.accuracyPct}
-                onStartChallenge={() => vscode.postMessage({ type: 'startChallenge' })}
-              />
-
-              <WeekPanel thisWeek={state.thisWeek} />
-
-              <div className="dash-cols dash-cols-wide">
-                <InsightsPanel insights={state.insights} />
-                <BadgesPanel badges={state.badges} />
-              </div>
-            </div>
-          )}
-
-          {tab === 'history' && (
-            <div className="c-enter" key="history">
-              <h1 className="dash-greeting">History</h1>
-              <p className="dash-subgreeting">Every challenge you've answered, newest first.</p>
-              <HistoryPanel history={state.history} />
-            </div>
-          )}
-
-          {tab === 'project' && (
-            <div className="c-enter" key="project">
-              <h1 className="dash-greeting">{state.project.name}</h1>
-              <p className="dash-subgreeting">How well you know this workspace.</p>
-              <ProjectPanel project={state.project} />
-            </div>
-          )}
-
-          {tab === 'settings' && (
-            <div className="c-enter" key="settings">
-              <h1 className="dash-greeting">Settings</h1>
-              <p className="dash-subgreeting">Tune when Codora interrupts you, and what it asks.</p>
-              <SettingsPanel
-                settings={state.settings}
-                aiStatus={state.aiStatus}
-                onChange={(patch) => vscode.postMessage({ type: 'updateSettings', payload: patch })}
-                onResetProjectData={() => vscode.postMessage({ type: 'resetProjectData' })}
-                onConfigureAI={() => vscode.postMessage({ type: 'configureAI' })}
-              />
-            </div>
-          )}
+        {/* Narrow panels drop the rail and switch sections with tabs instead. */}
+        <div className="dash-tabs">
+          <Tabs<Tab>
+            label="Dashboard sections"
+            active={tab}
+            onChange={setTab}
+            items={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'history', label: 'History', count: historyCount },
+              { id: 'project', label: 'Project' },
+              { id: 'settings', label: 'Settings' },
+            ]}
+          />
         </div>
-      </main>
+
+        <main className="dash-main">
+          {!state ? (
+            <>
+              <div className="skeleton" style={{ height: 14, width: 220 }} />
+              <div className="skeleton" style={{ height: 76, width: '70%' }} />
+              <div className="skeleton" style={{ height: 160 }} />
+            </>
+          ) : (
+            <>
+              {tab === 'overview' && (
+                <>
+                  <AuraCard
+                    scope="All workspaces"
+                    aura={state.globalAura}
+                    hasEnoughData={state.hasEnoughData}
+                    breakdown={state.breakdown}
+                    onStartChallenge={startChallenge}
+                    measures={[
+                      { label: 'Answered this week', value: state.thisWeek.challengesCompleted },
+                      {
+                        label: 'Correct this week',
+                        value: state.thisWeek.accuracyPct !== null ? `${state.thisWeek.accuracyPct}%` : '—',
+                      },
+                      ...(state.auraDeltaThisWeek !== null
+                        ? [
+                            {
+                              label: 'Change this week',
+                              value: `${state.auraDeltaThisWeek >= 0 ? '+' : '−'}${Math.abs(state.auraDeltaThisWeek).toFixed(0)}%`,
+                              tone: state.auraDeltaThisWeek >= 0 ? ('good' as const) : ('critical' as const),
+                            },
+                          ]
+                        : []),
+                      { label: 'Current streak', value: `${state.thisWeek.currentStreak} days` },
+                      { label: 'Best streak', value: `${state.thisWeek.bestStreak} days` },
+                      { label: 'Coding sessions', value: state.thisWeek.codingSessions },
+                    ]}
+                  />
+                  <WeekPanel days={state.thisWeek.dailyChallengeCounts} />
+                  <InsightsPanel insights={state.insights} />
+                  <BadgesPanel badges={state.badges} />
+                </>
+              )}
+
+              {tab === 'history' && <HistoryPanel history={state.history} onStartChallenge={startChallenge} />}
+
+              {tab === 'project' && <ProjectPanel project={state.project} />}
+
+              {tab === 'settings' && (
+                <SettingsPanel
+                  settings={state.settings}
+                  aiStatus={state.aiStatus}
+                  onChange={(patch) => vscode.postMessage({ type: 'updateSettings', payload: patch })}
+                  onResetProjectData={() => vscode.postMessage({ type: 'resetProjectData' })}
+                  onConfigureAI={() => vscode.postMessage({ type: 'configureAI' })}
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
-}
-
-/** Mirrors the real layout so the panel doesn't visibly reflow once state lands. */
-function LoadingShell(): JSX.Element {
-  return (
-    <div className="dash">
-      <aside className="dash-rail">
-        <div className="dash-brand">
-          <span className="dash-brand-mark">
-            <IconAura size={17} strokeWidth={1.8} />
-          </span>
-          <span className="dash-brand-name">Codora</span>
-        </div>
-        <div className="dash-nav">
-          {NAV.map(({ id }) => (
-            <div key={id} className="c-skeleton" style={{ height: 34 }} />
-          ))}
-        </div>
-      </aside>
-      <main className="dash-main">
-        <div className="dash-main-inner">
-          <div className="c-skeleton" style={{ height: 20, width: 180, marginBottom: 24 }} />
-          <div className="c-skeleton" style={{ height: 36, width: 260, marginBottom: 22 }} />
-          <div className="dash-stats">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="c-skeleton" style={{ height: 92 }} />
-            ))}
-          </div>
-          <div className="c-skeleton" style={{ height: 220, marginTop: 14 }} />
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return 'Still up?';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
 }
