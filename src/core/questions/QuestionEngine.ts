@@ -14,6 +14,8 @@ import { pickDifficulty } from './QuestionDifficulty';
 import { questionFingerprint } from './questionFingerprint';
 import { planAttempts } from './planAttempts';
 import { summarizeProviderError } from '../ai/summarizeProviderError';
+import { checkAnswerKey, type AnswerKeyVerdict } from './AnswerKeyCheck';
+import type { ReviewSubject } from './retention';
 
 const MAX_FILE_READ_BYTES = 200_000;
 /** Real AI calls attempted per provider, per challenge, before moving to the next provider — bounded so a failing provider doesn't turn every challenge into dozens of sequential requests. A non-retryable error (bad key, exhausted quota, retired model) stops that provider immediately, well before this cap. */
@@ -22,8 +24,10 @@ const MAX_AI_ATTEMPTS_PER_PROVIDER = 3;
 export interface GenerateChallengeOptions {
   enabledCategories: ChallengeCategory[];
   categoryScores: RollingScoreMap;
-  /** Files asked about more than N days ago — eligible for a retention check. */
-  staleSubjectFiles: Set<string>;
+  /** Code asked about before whose spaced review is due (see retention.ts), most overdue first. */
+  reviewDue: ReviewSubject[];
+  /** Lead with the most overdue review this time, instead of only recently changed code. */
+  preferReview: boolean;
   /**
    * Tried in order — each gets its own bounded attempt budget
    * (MAX_AI_ATTEMPTS_PER_PROVIDER) across different categories/files
@@ -37,6 +41,8 @@ export interface GenerateChallengeOptions {
   recentFingerprints?: Set<string>;
   /** Called once per provider that couldn't produce a question, so the caller can report the real reason in the UI instead of guessing at it. */
   onProviderFailure?: (providerLabel: string, reason: string | undefined) => void;
+  /** Called for each generated question thrown away by the answer-key check. */
+  onQuestionRejected?: (verdict: Extract<AnswerKeyVerdict, 'disagreed' | 'ambiguous'>) => void;
 }
 
 interface CandidateFile {
@@ -51,7 +57,7 @@ export class QuestionEngine {
 
   async generateChallenge(options: GenerateChallengeOptions): Promise<GeneratedQuestion | undefined> {
     const root = this.workspaceFolder.uri.fsPath;
-    const candidates = await this.buildCandidateFiles(root);
+    const candidates = await this.buildCandidateFiles(root, options);
     if (candidates.length === 0) {
       getLogger().info('No usable context for a challenge — skipping');
       return undefined;
@@ -116,7 +122,7 @@ export class QuestionEngine {
       }
       attempts++;
 
-      const isRetentionCheck = options.staleSubjectFiles.has(candidate.file.relativePath);
+      const isRetentionCheck = options.reviewDue.some((r) => r.file === candidate.file.relativePath);
       const difficulty = pickDifficulty(category as unknown as ScoreCategory, options.categoryScores);
       const aiQuestion = await tryGenerateAIQuestion(
         provider,
@@ -133,7 +139,23 @@ export class QuestionEngine {
           if (!retryable) giveUpOnProvider = true;
         },
       );
-      if (aiQuestion) return aiQuestion;
+      if (!aiQuestion) continue;
+
+      // A second model, when one is set up, checks the key more
+      // independently than the model that wrote it.
+      const checker = (options.aiProviders ?? []).find((p) => p !== provider) ?? provider;
+      const verdict = await checkAnswerKey(aiQuestion, checker);
+      if (verdict === 'disagreed' || verdict === 'ambiguous') {
+        getLogger().info('Discarded a question that failed the answer-key check', {
+          verdict,
+          generator: provider.id,
+          checker: checker.id,
+        });
+        lastFailureReason = 'its questions did not pass the answer-key check';
+        options.onQuestionRejected?.(verdict);
+        continue;
+      }
+      return aiQuestion.body.kind === 'multiple-choice' ? { ...aiQuestion, answerKeyCheck: verdict } : aiQuestion;
     }
 
     if (attempts > 0) this.reportAIFailure(provider, lastFailureReason, options);
@@ -159,9 +181,22 @@ export class QuestionEngine {
     options.onProviderFailure?.(provider.label, reason);
   }
 
-  private async buildCandidateFiles(root: string): Promise<CandidateFile[]> {
+  private async buildCandidateFiles(root: string, options: GenerateChallengeOptions): Promise<CandidateFile[]> {
     const git = await analyzeGit(root);
     const results: CandidateFile[] = [];
+
+    // A due review goes first, so it's the first thing tried — re-reading
+    // the code as it is now, since it may have changed since it was asked.
+    if (options.preferReview) {
+      for (const review of options.reviewDue) {
+        const text = safeRead(path.join(root, review.file));
+        if (!text) continue;
+        const functions = extractFunctions(text, review.file);
+        const fn = functions.find((f) => f.name === review.subjectFunction) ?? functions[0];
+        results.push({ file: { relativePath: review.file, text }, fn, commitMessage: null });
+        break;
+      }
+    }
 
     if (git.available && git.changedFiles.length > 0) {
       const changedLines = parseChangedLines(git.diff);
@@ -178,7 +213,7 @@ export class QuestionEngine {
       }
     }
 
-    if (results.length === 0) {
+    if (results.length <= (options.preferReview ? 1 : 0)) {
       const recent = await findRecentlyModifiedFiles(this.workspaceFolder);
       for (const r of recent.slice(0, 8)) {
         const text = safeRead(r.uri.fsPath);

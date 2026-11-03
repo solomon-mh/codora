@@ -136,6 +136,12 @@ export function SettingsPanel({
           code to your model, never your whole repository. Written answers go to the same model to be graded.
         </p>
         <div className="rows set-danger">
+          <SwitchRow
+            label="Share anonymous usage counts"
+            description="Counts like questions answered, skipped or reported. Never your code, file names, questions or answers. Also off whenever VS Code's telemetry is off."
+            checked={settings.metrics.enabled}
+            onChange={(v) => onChange({ metrics: { enabled: v, prompted: true } })}
+          />
           <div className="row">
             <span className="row-text">
               Reset this project

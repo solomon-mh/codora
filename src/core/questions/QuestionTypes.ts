@@ -120,7 +120,17 @@ export interface GeneratedQuestion {
    * the UI shows as an unattributed model rather than inventing a name.
    */
   generator?: AIModelIdentity;
+  /**
+   * Multiple choice only: what the blind answer-key check found before the
+   * question was shown. 'confirmed' — a model answering without the key
+   * picked the same option. 'unchecked' — the check couldn't run (the
+   * question was still shown). Questions that failed it are never shown.
+   */
+  answerKeyCheck?: 'confirmed' | 'unchecked';
 }
+
+/** Why a developer reported a question. */
+export type FlagReason = 'wrong-answer' | 'unclear' | 'not-relevant';
 
 export interface ChallengeAnswer {
   questionId: string;
@@ -135,4 +145,6 @@ export interface ChallengeRecord {
   question: GeneratedQuestion;
   answer: ChallengeAnswer;
   evaluation: import('../scoring/ScoreTypes').EvaluationResult;
+  /** Set when the developer reported the question after answering; it then doesn't count toward any score. */
+  flagged?: FlagReason;
 }

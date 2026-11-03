@@ -1,14 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
-import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
 import { BaseAIProvider } from './BaseAIProvider';
-import type {
-  AIEvaluationContext,
-  AIEvaluationPayload,
-  AIGenerationResult,
-  AIProvider,
-  AIQuestionContext,
-} from './AITypes';
+import type { AIProvider } from './AITypes';
 import { ANTHROPIC_MODEL_NAMES } from './modelDisplayName';
 import type { AnthropicModel } from '../storage/StorageSchema';
 
@@ -32,27 +24,11 @@ export class AnthropicProvider extends BaseAIProvider implements AIProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
-    const { system, user } = buildGenerationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return { outcome: 'unusable' };
-    return validateGenerationPayload(extractJsonObject(text));
-  }
-
-  async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
-    const { system, user } = buildEvaluationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return undefined;
-    return validateEvaluationPayload(extractJsonObject(text));
-  }
-
   // Deliberately no try/catch here: callers (tryGenerateAIQuestion,
   // HybridEvaluator) need the real error — a generic "request failed" with
   // no detail makes an auth/network/rate-limit problem indistinguishable
   // from "the model declined", and is impossible to diagnose from logs.
-  private async send(system: string, user: string): Promise<string | undefined> {
+  protected async send(system: string, user: string): Promise<string | undefined> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: MAX_TOKENS,

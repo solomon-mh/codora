@@ -1,5 +1,5 @@
 import type { RollingScoreMap } from '../scoring/ScoreTypes';
-import type { ChallengeRecord } from '../questions/QuestionTypes';
+import type { ChallengeRecord, FlagReason } from '../questions/QuestionTypes';
 import type { SessionRecord } from '../session/SessionState';
 
 /**
@@ -55,6 +55,12 @@ export interface CodoraSettings {
     gitOperations: boolean;
   };
   doNotDisturb: boolean;
+  /** Anonymous usage counts — off until the developer turns them on. See core/metrics/Metrics.ts for exactly what is sent. */
+  metrics: {
+    enabled: boolean;
+    /** True once the developer has been asked, so the one-time prompt never repeats. */
+    prompted: boolean;
+  };
   ai: {
     /** When false, Codora never attempts an AI call and never prompts to configure one. */
     enabled: boolean;
@@ -103,6 +109,8 @@ export interface ProjectData {
   challenges: ChallengeRecord[];
   categoryScores: RollingScoreMap;
   auraHistory: { date: string; value: number }[];
+  /** Questions reported before being answered; their subjects are avoided afterwards. */
+  flags: { fingerprint: string; reason: FlagReason; at: number }[];
 }
 
 export function defaultSettings(): CodoraSettings {
@@ -114,6 +122,7 @@ export function defaultSettings(): CodoraSettings {
     notifications: { challenge: true, dailyProgress: true, weeklySummary: true },
     avoidInterrupting: { debugging: true, testsRunning: true, gitOperations: true },
     doNotDisturb: false,
+    metrics: { enabled: false, prompted: false },
     ai: { enabled: true, anthropicModel: 'claude-haiku-4-5', openAIModel: 'gpt-4o-mini', geminiModel: 'gemini-3.6-flash' },
   };
 }

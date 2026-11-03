@@ -2,16 +2,8 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
-import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
 import { BaseAIProvider } from './BaseAIProvider';
-import type {
-  AIEvaluationContext,
-  AIEvaluationPayload,
-  AIGenerationResult,
-  AIProvider,
-  AIQuestionContext,
-} from './AITypes';
+import type { AIProvider } from './AITypes';
 import { getLogger } from '../../utils/logger';
 
 /** A CLI round trip includes process startup, so it needs a longer budget than an HTTP call. */
@@ -74,23 +66,7 @@ export class ClaudeCliProvider extends BaseAIProvider implements AIProvider {
     return cliPath ? new ClaudeCliProvider(cliPath) : undefined;
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
-    const { system, user } = buildGenerationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return { outcome: 'unusable' };
-    return validateGenerationPayload(extractJsonObject(text));
-  }
-
-  async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
-    const { system, user } = buildEvaluationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return undefined;
-    return validateEvaluationPayload(extractJsonObject(text));
-  }
-
-  private send(system: string, user: string): Promise<string | undefined> {
+  protected send(system: string, user: string): Promise<string | undefined> {
     // execFile with an argument array — never a shell string — so nothing in
     // the prompt (which embeds the developer's code) can be interpreted as a
     // shell command. Runs in a temp directory rather than the workspace so

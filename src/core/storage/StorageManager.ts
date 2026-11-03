@@ -57,6 +57,7 @@ function defaultProjectData(projectId: string, projectName: string): ProjectData
     challenges: [],
     categoryScores: createDefaultRollingScores(),
     auraHistory: [],
+    flags: [],
   };
 }
 
@@ -133,6 +134,7 @@ export class StorageManager {
           ...migrated.settings,
           notifications: { ...defaults.notifications, ...migrated.settings.notifications },
           avoidInterrupting: { ...defaults.avoidInterrupting, ...migrated.settings.avoidInterrupting },
+          metrics: { ...defaults.metrics, ...migrated.settings.metrics },
           ai: {
             ...storedAi,
             // Providers retire model ids; a retired id persisted here would
@@ -160,7 +162,8 @@ export class StorageManager {
       if (!Array.isArray(migrated.sessions) || !Array.isArray(migrated.challenges)) {
         throw new Error('missing required fields');
       }
-      return migrated;
+      // Added without a schema bump: older project data simply has no flags yet.
+      return { ...migrated, flags: migrated.flags ?? [] };
     } catch (err) {
       getLogger().warn('Corrupted project data, resetting to defaults', {
         projectId: this.projectId,

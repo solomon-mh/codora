@@ -37,6 +37,17 @@ export class ChallengeProvider {
 
   async open(): Promise<void> {
     const question = await this.controller.generateChallenge();
+    if (question) {
+      this.controller.metrics.track({
+        name: 'question_shown',
+        provider: question.generator?.providerId ?? 'unknown',
+        kind: question.body.kind,
+        category: question.category,
+        difficulty: question.difficulty,
+        review: question.isRetentionCheck,
+        keyCheck: question.answerKeyCheck ?? 'none',
+      });
+    }
     // Question generation is AI-only, so "no question" is a normal,
     // explainable outcome rather than an error — it gets shown in the panel
     // where the question would be, with the action that fixes it.
@@ -56,6 +67,10 @@ export class ChallengeProvider {
       this.panel.webview.html = getWebviewHtml(this.panel.webview, this.extensionUri, 'challenge', 'Codora Challenge');
       this.panel.webview.onDidReceiveMessage((message: ChallengeToExtensionMessage) => this.handleMessage(message));
       this.panel.onDidDispose(() => {
+        // Closed with a question still unanswered: the "dismissed" count.
+        if (this.pendingView?.kind === 'question' && this.controller.getPendingQuestion()) {
+          this.controller.metrics.track({ name: 'abandoned' });
+        }
         this.panel = undefined;
         this.pendingView = undefined;
       });
@@ -177,6 +192,11 @@ export class ChallengeProvider {
     }
     if (message.type === 'retry') {
       await this.open();
+      return;
+    }
+    if (message.type === 'flag') {
+      const { scoreReverted } = await this.controller.flagQuestion(message.payload.questionId, message.payload.reason);
+      this.post({ type: 'flagged', payload: { scoreReverted } });
       return;
     }
     if (message.type === 'action') {

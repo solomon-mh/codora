@@ -70,7 +70,8 @@ export function buildDashboardState(
       : null;
 
   const recentSessions = project.sessions.filter((s) => s.startedAt >= weekAgo);
-  const recentChallenges = project.challenges.filter((c) => c.answer.answeredAt >= weekAgo);
+  // Reported answers don't count toward any score, so they don't count toward accuracy either.
+  const recentChallenges = project.challenges.filter((c) => !c.flagged && c.answer.answeredAt >= weekAgo);
   const correctCount = recentChallenges.filter((c) => c.evaluation.correct).length;
 
   return {
@@ -155,6 +156,7 @@ function buildHistory(project: ProjectData, now: number): HistoryItem[] {
     .map((c) => ({
       questionId: c.question.id,
       correct: c.evaluation.correct,
+      flagged: c.flagged !== undefined,
       category: c.question.category,
       difficulty: c.question.difficulty,
       timestampLabel: relativeDay(c.answer.answeredAt, now),

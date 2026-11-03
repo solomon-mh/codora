@@ -6,7 +6,7 @@ import {
   type RollingScoreMap,
   type ScoreCategory,
 } from './ScoreTypes';
-import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeRecord } from '../questions/QuestionTypes';
+import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeRecord, type GeneratedQuestion } from '../questions/QuestionTypes';
 
 /**
  * How strongly a new result shifts the rolling score. Higher = more
@@ -49,17 +49,30 @@ export function updateRollingScore(
 }
 
 /**
- * Rebuild rolling scores from answered challenges, oldest first. Used to
- * migrate project scores exactly when the scoring rule changes.
+ * Apply one answer: it always counts toward its question's category, and a
+ * review question (code asked about weeks ago) also counts toward
+ * retention — the only way retention is ever scored.
+ */
+export function applyAnswer(
+  scores: RollingScoreMap,
+  question: Pick<GeneratedQuestion, 'type' | 'isRetentionCheck'>,
+  result0to1: number,
+  now: number,
+): RollingScoreMap {
+  const next = updateRollingScore(scores, QUESTION_TYPE_TO_SCORE_CATEGORY[question.type], result0to1, now);
+  return question.isRetentionCheck ? updateRollingScore(next, 'retention', result0to1, now) : next;
+}
+
+/**
+ * Rebuild rolling scores from answered challenges, oldest first, skipping
+ * any the developer reported. Used to migrate project scores exactly when
+ * the scoring rule changes, and to take a reported answer back out.
  */
 export function replayRollingScores(records: ChallengeRecord[]): RollingScoreMap {
-  return [...records]
+  return records
+    .filter((r) => !r.flagged)
     .sort((a, b) => a.answer.answeredAt - b.answer.answeredAt)
-    .reduce(
-      (scores, r) =>
-        updateRollingScore(scores, QUESTION_TYPE_TO_SCORE_CATEGORY[r.question.type], r.evaluation.score, r.answer.answeredAt),
-      createDefaultRollingScores(),
-    );
+    .reduce((scores, r) => applyAnswer(scores, r.question, r.evaluation.score, r.answer.answeredAt), createDefaultRollingScores());
 }
 
 /**

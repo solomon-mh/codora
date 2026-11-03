@@ -51,6 +51,7 @@ function projectData(overrides: Partial<ProjectData> = {}): ProjectData {
     challenges: [],
     categoryScores: createDefaultRollingScores(),
     auraHistory: [],
+    flags: [],
     ...overrides,
   };
 }
