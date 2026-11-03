@@ -41,8 +41,8 @@ export default {
 async function ingest(request: Request, env: Env): Promise<Response> {
   const length = Number(request.headers.get('content-length') ?? '0');
   if (length > MAX_BODY_BYTES) return new Response('Too large', { status: 413 });
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return new Response('Too large', { status: 413 });
+  const text = await readLimited(request, MAX_BODY_BYTES);
+  if (text === undefined) return new Response('Too large', { status: 413 });
 
   let raw: unknown;
   try {
@@ -72,6 +72,35 @@ async function ingest(request: Request, env: Env): Promise<Response> {
     ),
   );
   return new Response(null, { status: 204 });
+}
+
+/**
+ * Reads the body while counting bytes, and gives up as soon as it passes
+ * `max` — so a client that omits or lies about Content-Length can't make
+ * the Worker buffer an arbitrarily large body.
+ */
+async function readLimited(request: Request, max: number): Promise<string | undefined> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 async function summary(request: Request, env: Env, url: URL): Promise<Response> {

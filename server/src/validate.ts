@@ -76,9 +76,9 @@ export function cleanBatch(raw: unknown, now: number): CleanBatch | undefined {
 export function cleanEvent(raw: unknown, now: number): CleanEvent | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const e = raw as Record<string, unknown>;
-  if (typeof e.name !== 'string') return undefined;
+  // Own keys only: a name like "constructor" must not resolve through the prototype chain.
+  if (typeof e.name !== 'string' || !Object.hasOwn(EVENT_SCHEMA, e.name)) return undefined;
   const schema = EVENT_SCHEMA[e.name];
-  if (!schema) return undefined;
   if (typeof e.at !== 'number' || !Number.isFinite(e.at) || Math.abs(e.at - now) > MAX_CLOCK_SKEW_MS) return undefined;
 
   const rawProps = e.props && typeof e.props === 'object' ? (e.props as Record<string, unknown>) : {};

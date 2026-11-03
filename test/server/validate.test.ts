@@ -39,6 +39,10 @@ describe('server event validation', () => {
 
   it('drops unknown events and exact scores, and rejects a malformed envelope', () => {
     expect(cleanEvent({ name: 'keystroke', at: NOW, props: {} }, NOW)).toBeUndefined();
+    // Names that exist on every object's prototype chain must not slip through.
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(cleanEvent({ name, at: NOW, props: {} }, NOW), name).toBeUndefined();
+    }
     expect(cleanEvent({ ...asQueued(CLIENT_EVENTS[5]), props: { ...asQueued(CLIENT_EVENTS[5]).props, scoreBucket: 47 } }, NOW)).toBeUndefined();
     expect(cleanBatch({ installId: 'not-a-uuid', extensionVersion: '0.2.0', vscodeVersion: '1.106', events: [] }, NOW)).toBeUndefined();
   });
