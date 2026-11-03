@@ -1,0 +1,12 @@
+# Everything is bundled into dist/ by esbuild; ship only that and the assets.
+**
+!dist/extension.js
+!dist/webview/*.js
+!dist/webview/*.css
+!dist/webview/fonts/**
+!media/icon.svg
+!media/marketplace-icon.png
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE

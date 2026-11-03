@@ -1,14 +1,40 @@
 {
   "name": "codora",
   "displayName": "Codora",
-  "description": "Increase your aura by knowing what you code.",
-  "version": "0.1.0",
-  "publisher": "codora",
-  "private": true,
+  "description": "Know the code you ship. Codora asks one short question about code you just changed, so code an AI wrote never becomes code nobody understands.",
+  "version": "0.2.0",
+  "publisher": "solomon-mh",
+  "license": "MIT",
+  "icon": "media/marketplace-icon.png",
+  "galleryBanner": {
+    "color": "#121412",
+    "theme": "dark"
+  },
+  "homepage": "https://solomon-mh.github.io/codora/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solomon-mh/codora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/solomon-mh/codora/issues"
+  },
+  "keywords": [
+    "ai",
+    "comprehension",
+    "code review",
+    "learning",
+    "quiz",
+    "claude",
+    "copilot",
+    "understanding",
+    "comprehension debt"
+  ],
   "engines": {
     "vscode": "^1.93.0"
   },
   "categories": [
+    "Education",
+    "AI",
     "Other"
   ],
   "activationEvents": [
@@ -75,133 +101,7 @@
         "command": "codora.showOutput",
         "title": "Codora: Show Logs"
       }
-    ],
-    "configuration": {
-      "title": "Codora",
-      "properties": {
-        "codora.challengeInterval": {
-          "type": "string",
-          "enum": [
-            "10min",
-            "30min",
-            "1hour",
-            "custom",
-            "adaptive",
-            "off"
-          ],
-          "default": "30min",
-          "description": "How often (in active coding time) Codora offers a comprehension challenge."
-        },
-        "codora.challengeIntervalCustomMinutes": {
-          "type": "number",
-          "default": 30,
-          "minimum": 1,
-          "description": "Minutes between challenges when codora.challengeInterval is \"custom\"."
-        },
-        "codora.difficulty": {
-          "type": "string",
-          "enum": [
-            "adaptive",
-            "easy",
-            "medium",
-            "hard"
-          ],
-          "default": "adaptive",
-          "description": "Challenge difficulty."
-        },
-        "codora.categories": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "recall",
-              "reasoning",
-              "debugging",
-              "architecture",
-              "testing",
-              "security",
-              "performance"
-            ]
-          },
-          "default": [
-            "recall",
-            "reasoning",
-            "debugging",
-            "architecture",
-            "testing",
-            "security",
-            "performance"
-          ],
-          "description": "Enabled challenge categories."
-        },
-        "codora.notifications.challenge": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a notification when a challenge is ready."
-        },
-        "codora.notifications.dailyProgress": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a daily progress summary."
-        },
-        "codora.notifications.weeklySummary": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a weekly summary."
-        },
-        "codora.avoidInterrupting.debugging": {
-          "type": "boolean",
-          "default": true
-        },
-        "codora.avoidInterrupting.testsRunning": {
-          "type": "boolean",
-          "default": true
-        },
-        "codora.avoidInterrupting.gitOperations": {
-          "type": "boolean",
-          "default": true
-        },
-        "codora.doNotDisturb": {
-          "type": "boolean",
-          "default": false,
-          "description": "Manually silence Codora notifications (presentation mode / do-not-disturb)."
-        },
-        "codora.ai.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Allow Codora to use an AI model (VS Code's built-in Language Model API, e.g. GitHub Copilot, or a manually configured API key) to generate richer questions and evaluate free-text answers. When off, or when no AI is configured, Codora falls back to fully local deterministic templates."
-        },
-        "codora.ai.anthropicModel": {
-          "type": "string",
-          "enum": [
-            "claude-haiku-4-5",
-            "claude-sonnet-5",
-            "claude-opus-5"
-          ],
-          "default": "claude-haiku-4-5",
-          "description": "Model used for the manual Anthropic API key fallback (only used when no VS Code Language Model is available)."
-        },
-        "codora.ai.openAIModel": {
-          "type": "string",
-          "enum": [
-            "gpt-4o-mini",
-            "gpt-4o"
-          ],
-          "default": "gpt-4o-mini",
-          "description": "Model used for the manual OpenAI API key fallback (only used when no VS Code Language Model is available)."
-        },
-        "codora.ai.geminiModel": {
-          "type": "string",
-          "enum": [
-            "gemini-3.6-flash",
-            "gemini-3.8-flash",
-            "gemini-3.1-flash-lite"
-          ],
-          "default": "gemini-3.6-flash",
-          "description": "Model used for the manual Gemini API key fallback (only used when no VS Code Language Model is available)."
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "compile": "node esbuild.js",
