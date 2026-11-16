@@ -108,6 +108,24 @@ export function computeAura(scores: RollingScoreMap): number {
   return clamp(weightedSum / weightUsed, 0, 100);
 }
 
+/**
+ * How much one answer moved the aura. A category answered for the first
+ * time is measured from its neutral start, not left out of the "before"
+ * reading: otherwise the aura jumps from nothing (0) to 37.5 on a first
+ * wrong answer, and a wrong answer in a new category reads as a gain
+ * whenever the aura is below 37.5. Measured this way, a wrong answer always
+ * shows as a loss.
+ */
+export function auraChange(before: RollingScoreMap, after: RollingScoreMap): number {
+  const baseline = { ...before };
+  for (const category of SCORE_CATEGORIES) {
+    if (before[category].sampleCount === 0 && after[category].sampleCount > 0) {
+      baseline[category] = { value: NEUTRAL_START, sampleCount: 1, lastUpdated: 0 };
+    }
+  }
+  return computeAura(after) - computeAura(baseline);
+}
+
 export type AuraLabel =
   | 'Exceptional'
   | 'Excellent'

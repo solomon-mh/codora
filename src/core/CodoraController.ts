@@ -9,7 +9,7 @@ import { QuestionEngine } from './questions/QuestionEngine';
 import { questionFingerprint } from './questions/questionFingerprint';
 import { DeterministicEvaluator, isShallowFreeTextAnswer, type Evaluator } from './scoring/Evaluator';
 import { HybridEvaluator } from './scoring/HybridEvaluator';
-import { applyAnswer, computeAura, replayRollingScores } from './scoring/ScoreEngine';
+import { applyAnswer, auraChange, computeAura, replayRollingScores } from './scoring/ScoreEngine';
 import { recordChallengeCompletion, applyStreakDecay } from './scoring/StreakEngine';
 import { evaluateBadges } from './badges/BadgeEngine';
 import { tryGenerateAIQuestion } from './questions/AIQuestionGenerator';
@@ -208,7 +208,6 @@ export class CodoraController implements vscode.Disposable {
     const now = Date.now();
 
     const globalBefore = this.storage.getGlobalProfile();
-    const auraBefore = computeAura(globalBefore.categoryScores);
 
     const record: ChallengeRecord = { question, answer, evaluation };
 
@@ -239,8 +238,7 @@ export class CodoraController implements vscode.Disposable {
       await this.storage.updateGlobalProfile((p) => ({ ...p, badges: [...p.badges, ...newBadges] }));
     }
 
-    const auraAfter = computeAura(this.storage.getGlobalProfile().categoryScores);
-    const auraDelta = auraAfter - auraBefore;
+    const auraDelta = auraChange(globalBefore.categoryScores, this.storage.getGlobalProfile().categoryScores);
     this.lastSubmission = { questionId: question.id, globalScoresBefore: globalBefore.categoryScores };
     this.metrics.track({
       name: 'answered',
