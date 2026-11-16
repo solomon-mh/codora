@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { SOURCE_EXTENSIONS } from './sendableFiles';
 
 const EXCLUDE_GLOB = '**/{node_modules,dist,out,build,.git,vendor,__pycache__,.venv}/**';
 const MAX_RECENT_FILES = 12;
@@ -36,8 +37,11 @@ const CONFIG_FILES = [
 export async function findRecentlyModifiedFiles(
   workspaceFolder: vscode.WorkspaceFolder,
 ): Promise<RecentFile[]> {
+  // Source files only: the 500-file cap below is applied before sorting by
+  // age, so listing images, lock files and data here could crowd out the
+  // code that was actually edited.
   const uris = await vscode.workspace.findFiles(
-    new vscode.RelativePattern(workspaceFolder, '**/*'),
+    new vscode.RelativePattern(workspaceFolder, `**/*.{${SOURCE_EXTENSIONS.join(',')}}`),
     EXCLUDE_GLOB,
     500,
   );

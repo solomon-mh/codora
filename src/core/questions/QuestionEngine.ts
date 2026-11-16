@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { analyzeGit } from '../context/GitAnalyzer';
+import { analyzeGit, filterGitIgnored } from '../context/GitAnalyzer';
+import { isSendableSourcePath, looksBinary } from '../context/sendableFiles';
 import { findRecentlyModifiedFiles } from '../context/WorkspaceAnalyzer';
 import { extractFunctions, findFunctionTouchedByLines, parseChangedLines } from '../context/CodeContextExtractor';
 import type { ChallengeCategory, FileContext, GeneratedQuestion } from './QuestionTypes';
@@ -189,6 +190,7 @@ export class QuestionEngine {
     // the code as it is now, since it may have changed since it was asked.
     if (options.preferReview) {
       for (const review of options.reviewDue) {
+        if (!isSendableSourcePath(review.file)) continue;
         const text = safeRead(path.join(root, review.file));
         if (!text) continue;
         const functions = extractFunctions(text, review.file);
@@ -200,7 +202,8 @@ export class QuestionEngine {
 
     if (git.available && git.changedFiles.length > 0) {
       const changedLines = parseChangedLines(git.diff);
-      for (const relPath of git.changedFiles.slice(0, 8)) {
+      // Filtered before the cap, so lock files and config don't use up the eight slots.
+      for (const relPath of git.changedFiles.filter(isSendableSourcePath).slice(0, 8)) {
         const text = safeRead(path.join(root, relPath));
         if (!text) continue;
         const fileContext: FileContext = { relativePath: relPath, text };
@@ -214,8 +217,13 @@ export class QuestionEngine {
     }
 
     if (results.length <= (options.preferReview ? 1 : 0)) {
-      const recent = await findRecentlyModifiedFiles(this.workspaceFolder);
-      for (const r of recent.slice(0, 8)) {
+      // Unlike `git status`, a file listing includes what git ignores
+      // (.env, local credentials, generated files), so those are removed.
+      const recent = (await findRecentlyModifiedFiles(this.workspaceFolder)).filter((r) =>
+        isSendableSourcePath(r.relativePath),
+      );
+      const notIgnored = new Set(await filterGitIgnored(root, recent.map((r) => r.relativePath)));
+      for (const r of recent.filter((f) => notIgnored.has(f.relativePath)).slice(0, 8)) {
         const text = safeRead(r.uri.fsPath);
         if (!text) continue;
         const fileContext: FileContext = { relativePath: r.relativePath, text };
@@ -234,7 +242,7 @@ export class QuestionEngine {
   private findTestFile(root: string, sourceRelPath: string, changedFiles: string[]): FileContext | undefined {
     const base = path.basename(sourceRelPath).replace(/\.[^.]+$/, '');
     const testCandidate = changedFiles.find(
-      (f) => f !== sourceRelPath && f.includes(base) && /\.(test|spec)\./.test(f),
+      (f) => f !== sourceRelPath && f.includes(base) && /\.(test|spec)\./.test(f) && isSendableSourcePath(f),
     );
     if (!testCandidate) return undefined;
     const text = safeRead(path.join(root, testCandidate));
@@ -247,7 +255,8 @@ function safeRead(filePath: string): string | undefined {
     if (!fs.existsSync(filePath)) return undefined;
     const stat = fs.statSync(filePath);
     if (!stat.isFile() || stat.size > MAX_FILE_READ_BYTES) return undefined;
-    return fs.readFileSync(filePath, 'utf8');
+    const text = fs.readFileSync(filePath, 'utf8');
+    return looksBinary(text) ? undefined : text;
   } catch {
     return undefined;
   }

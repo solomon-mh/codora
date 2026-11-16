@@ -59,6 +59,38 @@ export async function analyzeGit(workspaceRoot: string): Promise<GitContext | Gi
   }
 }
 
+/**
+ * Drops the paths git ignores (.gitignore, .git/info/exclude, the global
+ * excludes file). Tracked files are never reported as ignored, so only
+ * files git itself would leave out are removed. Without git, or if the
+ * check fails, nothing is known to be ignored and every path is kept;
+ * isSendableSourcePath still applies either way.
+ */
+export function filterGitIgnored(workspaceRoot: string, relativePaths: string[]): Promise<string[]> {
+  if (relativePaths.length === 0 || !fs.existsSync(path.join(workspaceRoot, '.git'))) {
+    return Promise.resolve(relativePaths);
+  }
+  return new Promise((resolve) => {
+    const child = execFile(
+      'git',
+      ['check-ignore', '--stdin', '-z'],
+      { cwd: workspaceRoot, maxBuffer: 1024 * 1024 },
+      (error, stdout) => {
+        // Exit code 1 means "none of these are ignored", not a failure.
+        // At runtime `code` is the numeric exit status, though Node's types call it a string.
+        if (error && (error as { code?: unknown }).code !== 1) {
+          getLogger().warn('git check-ignore failed; keeping all candidate files', { error: String(error) });
+          resolve(relativePaths);
+          return;
+        }
+        const ignored = new Set(stdout.split('\0').filter(Boolean));
+        resolve(relativePaths.filter((p) => !ignored.has(p)));
+      },
+    );
+    child.stdin?.end(relativePaths.map((p) => `${p}\0`).join(''));
+  });
+}
+
 /** Whether a .git/index.lock is present — used to avoid interrupting an in-progress git operation. */
 export function isGitOperationInProgress(workspaceRoot: string): boolean {
   return fs.existsSync(path.join(workspaceRoot, '.git', 'index.lock'));
