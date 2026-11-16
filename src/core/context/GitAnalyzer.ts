@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getLogger } from '../../utils/logger';
+import { parsePorcelainZ } from './parseGitStatus';
 
 export interface GitContext {
   available: true;
@@ -40,16 +41,11 @@ export async function analyzeGit(workspaceRoot: string): Promise<GitContext | Gi
   try {
     const [diff, statusOutput, logOutput] = await Promise.all([
       run(['diff', 'HEAD'], workspaceRoot),
-      run(['status', '--porcelain'], workspaceRoot),
+      run(['status', '--porcelain', '-z'], workspaceRoot),
       run(['log', '-1', '--pretty=%s'], workspaceRoot).catch(() => ''),
     ]);
 
-    const changedFiles = statusOutput
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.slice(3).trim())
-      .filter(Boolean);
+    const changedFiles = parsePorcelainZ(statusOutput);
 
     return {
       available: true,
