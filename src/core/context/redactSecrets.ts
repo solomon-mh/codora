@@ -12,7 +12,8 @@
 export const REDACTED = '[redacted]';
 
 const KEY_PATTERNS: RegExp[] = [
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+  // A block with no END marker (cut off, or malformed) is hidden to the end of the text.
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$(?![\s\S]))/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}/g, // Anthropic
   /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}/g, // OpenAI
   /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, // AWS access key id

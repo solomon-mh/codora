@@ -27,6 +27,16 @@ describe('redactSecrets', () => {
     expect(redactSecrets(`const key = \`${pem}\`;`)).toBe(`const key = \`${REDACTED}\`;`);
   });
 
+  it('hides a private key block that has no END marker, to the end of the text', () => {
+    const cut = 'const a = 1;\nconst key = `-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQ';
+    expect(redactSecrets(cut)).toBe(`const a = 1;\nconst key = \`${REDACTED}`);
+  });
+
+  it('keeps redacting each of several private key blocks separately', () => {
+    const two = '-----BEGIN PRIVATE KEY-----\nA\n-----END PRIVATE KEY-----\nconst x = 1;\n-----BEGIN EC PRIVATE KEY-----\nB\n-----END EC PRIVATE KEY-----';
+    expect(redactSecrets(two)).toBe(`${REDACTED}\nconst x = 1;\n${REDACTED}`);
+  });
+
   it('keeps the name but hides a secret-looking assignment', () => {
     expect(redactSecrets('const password = "hunter2hunter2";')).toBe(`const password = "${REDACTED}";`);
     expect(redactSecrets("config = { apiKey: 'abcd1234efgh' }")).toBe(`config = { apiKey: '${REDACTED}' }`);
