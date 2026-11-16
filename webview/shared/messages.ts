@@ -1,4 +1,4 @@
-import type { GeneratedQuestion, ChallengeAnswer } from '../../src/core/questions/QuestionTypes';
+import type { GeneratedQuestion, ChallengeAnswer, FlagReason } from '../../src/core/questions/QuestionTypes';
 import type { AIModelIdentity } from '../../src/core/ai/AIIdentity';
 import type { EvaluationResult, ScoreCategory } from '../../src/core/scoring/ScoreTypes';
 import type { CodoraSettings } from '../../src/core/storage/StorageSchema';
@@ -14,6 +14,8 @@ export interface CategoryBreakdownItem {
 export interface HistoryItem {
   questionId: string;
   correct: boolean;
+  /** Reported by the developer after answering; it doesn't count toward any score. */
+  flagged: boolean;
   category: string;
   difficulty: string;
   timestampLabel: string;
@@ -142,6 +144,8 @@ export type ChallengeToExtensionMessage =
   | { type: 'submitAnswer'; payload: ChallengeAnswer }
   | { type: 'retry' }
   | { type: 'action'; payload: ChallengeUnavailableAction }
+  /** The developer reports the question — before answering it, or from the result screen. */
+  | { type: 'flag'; payload: { questionId: string; reason: FlagReason } }
   | { type: 'close' };
 
 export type ExtensionToChallengeMessage =
@@ -155,6 +159,8 @@ export type ExtensionToChallengeMessage =
       };
     }
   | { type: 'followUp'; payload: GeneratedQuestion }
+  /** A report was recorded; `scoreReverted` when an answered question was taken back out of the scores. */
+  | { type: 'flagged'; payload: { scoreReverted: boolean } }
   | { type: 'unavailable'; payload: ChallengeUnavailable };
 
 export type OnboardingToExtensionMessage = {

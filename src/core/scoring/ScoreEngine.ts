@@ -6,7 +6,7 @@ import {
   type RollingScoreMap,
   type ScoreCategory,
 } from './ScoreTypes';
-import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeRecord } from '../questions/QuestionTypes';
+import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeRecord, type GeneratedQuestion } from '../questions/QuestionTypes';
 
 /**
  * How strongly a new result shifts the rolling score. Higher = more
@@ -49,17 +49,30 @@ export function updateRollingScore(
 }
 
 /**
- * Rebuild rolling scores from answered challenges, oldest first. Used to
- * migrate project scores exactly when the scoring rule changes.
+ * Apply one answer: it always counts toward its question's category, and a
+ * review question (code asked about weeks ago) also counts toward
+ * retention — the only way retention is ever scored.
+ */
+export function applyAnswer(
+  scores: RollingScoreMap,
+  question: Pick<GeneratedQuestion, 'type' | 'isRetentionCheck'>,
+  result0to1: number,
+  now: number,
+): RollingScoreMap {
+  const next = updateRollingScore(scores, QUESTION_TYPE_TO_SCORE_CATEGORY[question.type], result0to1, now);
+  return question.isRetentionCheck ? updateRollingScore(next, 'retention', result0to1, now) : next;
+}
+
+/**
+ * Rebuild rolling scores from answered challenges, oldest first, skipping
+ * any the developer reported. Used to migrate project scores exactly when
+ * the scoring rule changes, and to take a reported answer back out.
  */
 export function replayRollingScores(records: ChallengeRecord[]): RollingScoreMap {
-  return [...records]
+  return records
+    .filter((r) => !r.flagged)
     .sort((a, b) => a.answer.answeredAt - b.answer.answeredAt)
-    .reduce(
-      (scores, r) =>
-        updateRollingScore(scores, QUESTION_TYPE_TO_SCORE_CATEGORY[r.question.type], r.evaluation.score, r.answer.answeredAt),
-      createDefaultRollingScores(),
-    );
+    .reduce((scores, r) => applyAnswer(scores, r.question, r.evaluation.score, r.answer.answeredAt), createDefaultRollingScores());
 }
 
 /**
@@ -93,6 +106,24 @@ export function computeAura(scores: RollingScoreMap): number {
   // Renormalize over categories that actually have data, so a brand-new
   // user isn't penalized for categories they haven't been asked about yet.
   return clamp(weightedSum / weightUsed, 0, 100);
+}
+
+/**
+ * How much one answer moved the aura. A category answered for the first
+ * time is measured from its neutral start, not left out of the "before"
+ * reading: otherwise the aura jumps from nothing (0) to 37.5 on a first
+ * wrong answer, and a wrong answer in a new category reads as a gain
+ * whenever the aura is below 37.5. Measured this way, a wrong answer always
+ * shows as a loss.
+ */
+export function auraChange(before: RollingScoreMap, after: RollingScoreMap): number {
+  const baseline = { ...before };
+  for (const category of SCORE_CATEGORIES) {
+    if (before[category].sampleCount === 0 && after[category].sampleCount > 0) {
+      baseline[category] = { value: NEUTRAL_START, sampleCount: 1, lastUpdated: 0 };
+    }
+  }
+  return computeAura(after) - computeAura(baseline);
 }
 
 export type AuraLabel =

@@ -349,3 +349,53 @@
     border-top: 1px solid var(--border);
   }
 }
+
+/* ---------- Reporting a question ---------- */
+
+/* A text button: secondary actions that must not compete with the primary one. */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link-btn:hover {
+    color: var(--text);
+    text-decoration-color: currentColor;
+  }
+}
+
+.report {
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+}
+
+.report-title {
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.report-cancel {
+  margin-top: var(--sp-3);
+}
+
+.chal-report-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.chal-reported {
+  margin-top: var(--sp-5);
+}

@@ -1,4 +1,4 @@
-import type { AIEvaluationPayload, AIGeneratedQuestionPayload, AIGenerationResult } from './AITypes';
+import type { AIAnswerCheck, AIEvaluationPayload, AIGeneratedQuestionPayload, AIGenerationResult } from './AITypes';
 
 /**
  * Extracts a JSON object from a model response, tolerating markdown code
@@ -80,4 +80,18 @@ export function validateEvaluationPayload(raw: unknown): AIEvaluationPayload | u
   if (!isNonEmptyString(obj.feedback)) return undefined;
 
   return obj as unknown as AIEvaluationPayload;
+}
+
+/**
+ * A blind answer to a multiple-choice question: `{"answer": "<option id>"}`,
+ * or `{"answer": null, "ambiguous": true}` when the model finds no option
+ * (or more than one) defensibly correct. An id that isn't one of the
+ * question's options is unusable, not a disagreement.
+ */
+export function validateAnswerCheckPayload(raw: unknown, optionIds: string[]): AIAnswerCheck | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  if (obj.ambiguous === true || obj.answer === null) return { optionId: null, ambiguous: true };
+  if (!isNonEmptyString(obj.answer) || !optionIds.includes(obj.answer)) return undefined;
+  return { optionId: obj.answer, ambiguous: false };
 }

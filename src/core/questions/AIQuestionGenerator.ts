@@ -1,4 +1,5 @@
 import { newId } from '../../utils/id';
+import { redactSecrets } from '../context/redactSecrets';
 import { getLogger } from '../../utils/logger';
 import { isRetryableProviderError } from '../ai/classifyProviderError';
 import { summarizeProviderError } from '../ai/summarizeProviderError';
@@ -43,7 +44,9 @@ export async function tryGenerateAIQuestion(
   isRetentionCheck: boolean,
   onFailure?: (reason: string, retryable: boolean) => void,
 ): Promise<GeneratedQuestion | undefined> {
-  const codeSnippet = (candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim();
+  // Redacted here, once: this snippet is what every model call (question,
+  // answer-key check, grading, follow-up) sends, and what is stored.
+  const codeSnippet = redactSecrets((candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim());
   if (!codeSnippet) return undefined;
 
   let result;

@@ -6,7 +6,7 @@ import type {
   ChallengeUnavailable,
   ExtensionToChallengeMessage,
 } from '../shared/messages';
-import type { GeneratedQuestion } from '../../src/core/questions/QuestionTypes';
+import type { FlagReason, GeneratedQuestion } from '../../src/core/questions/QuestionTypes';
 import type { EvaluationResult } from '../../src/core/scoring/ScoreTypes';
 import { IconArrowRight, IconKey, IconPlug, IconTerminal } from '../shared/Icons';
 import { ModelBadge } from '../shared/ModelBadge';
@@ -28,6 +28,9 @@ export function App(): JSX.Element {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [freeText, setFreeText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  /** Set once a report is recorded: whether an answered question was taken back out of the scores. */
+  const [flagged, setFlagged] = useState<{ scoreReverted: boolean } | null>(null);
   const startedAt = useRef(Date.now());
 
   useEffect(() => {
@@ -40,6 +43,8 @@ export function App(): JSX.Element {
         setSelectedOption(null);
         setFreeText('');
         setSubmitting(false);
+        setReporting(false);
+        setFlagged(null);
         startedAt.current = Date.now();
       } else if (msg.type === 'unavailable') {
         setUnavailable(msg.payload);
@@ -49,6 +54,9 @@ export function App(): JSX.Element {
       } else if (msg.type === 'result') {
         setResult(msg.payload);
         setSubmitting(false);
+      } else if (msg.type === 'flagged') {
+        setFlagged(msg.payload);
+        setReporting(false);
       }
     };
     window.addEventListener('message', handler);
@@ -99,6 +107,9 @@ export function App(): JSX.Element {
 
   if (unavailable) return <UnavailableView state={unavailable} />;
   if (!question) return <LoadingView />;
+  if (flagged && !result) return <ReportedView />;
+
+  const report = (reason: FlagReason) => vscode.postMessage({ type: 'flag', payload: { questionId: question.id, reason } });
 
   const { provenance } = question;
   const file = provenance.sourceFiles[0];
@@ -108,7 +119,7 @@ export function App(): JSX.Element {
       <p className="meta chal-meta">
         <span className="cap meta-strong">{question.category}</span>
         <span className="cap">{question.difficulty}</span>
-        {question.isRetentionCheck && <span>Asked before</span>}
+        {question.isRetentionCheck && <span title="You were asked about this code before. Reviews check you still understand it.">Review</span>}
         <ModelBadge generator={question.generator} generatedBy={question.generatedBy} size={11} />
       </p>
 
@@ -177,8 +188,13 @@ export function App(): JSX.Element {
         </div>
       )}
 
+      {!result && reporting && <ReportPicker onPick={report} onCancel={() => setReporting(false)} />}
+
       {!result && (
         <footer className="chal-foot">
+          <button type="button" className="link-btn" onClick={() => setReporting((r) => !r)} aria-expanded={reporting}>
+            Report question
+          </button>
           <span className="faint chal-hint">
             {question.body.kind === 'multiple-choice'
               ? `1–${question.body.options.length} to choose · ${SUBMIT_KEYS} to check`
@@ -190,7 +206,64 @@ export function App(): JSX.Element {
         </footer>
       )}
 
-      {result && <ResultView result={result} freeText={question.body.kind === 'free-text' ? freeText : undefined} />}
+      {result && (
+        <ResultView
+          result={result}
+          freeText={question.body.kind === 'free-text' ? freeText : undefined}
+          flagged={flagged}
+          onReportWrongKey={question.body.kind === 'multiple-choice' ? () => report('wrong-answer') : undefined}
+          onReportUnclear={() => report('unclear')}
+        />
+      )}
+    </div>
+  );
+}
+
+const REPORT_REASONS: { reason: FlagReason; label: string; hint: string }[] = [
+  { reason: 'wrong-answer', label: 'The answer looks wrong', hint: 'None of the options is right, or more than one is.' },
+  { reason: 'unclear', label: 'The question is unclear', hint: "It's ambiguous or doesn't make sense." },
+  { reason: 'not-relevant', label: "It's not about my code", hint: 'Generated, vendored or unrelated code.' },
+];
+
+/** Reasons to report a question, shown inline under the answers. Reporting skips it and avoids its subject. */
+function ReportPicker({ onPick, onCancel }: { onPick: (reason: FlagReason) => void; onCancel: () => void }): JSX.Element {
+  return (
+    <div className="report">
+      <p className="report-title">What's wrong with this question?</p>
+      <div className="rows">
+        {REPORT_REASONS.map((r) => (
+          <button key={r.reason} type="button" className="row" onClick={() => onPick(r.reason)}>
+            <span className="row-text">
+              {r.label}
+              <span className="row-hint">{r.hint}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <button type="button" className="link-btn report-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+/** After reporting an unanswered question: it won't count, and its subject won't be asked again. */
+function ReportedView(): JSX.Element {
+  return (
+    <div className="chal">
+      <p className="meta chal-meta">
+        <span className="sev tone-good">Reported</span>
+      </p>
+      <h1 className="verdict-sm chal-question">Thanks. That question won't be asked again.</h1>
+      <p className="muted chal-reason">It doesn't count toward your aura. Reports also tell Codora which questions to stop writing.</p>
+      <footer className="chal-foot">
+        <button className="btn" onClick={() => vscode.postMessage({ type: 'close' })}>
+          Close
+        </button>
+        <button className="btn btn--primary" onClick={() => vscode.postMessage({ type: 'retry' })}>
+          Ask another question
+        </button>
+      </footer>
     </div>
   );
 }
@@ -273,7 +346,19 @@ function setupIcon(option: ChallengeSetupOption): JSX.Element {
   return <IconKey size={15} />;
 }
 
-function ResultView({ result, freeText }: { result: ResultState; freeText?: string }): JSX.Element {
+function ResultView({
+  result,
+  freeText,
+  flagged,
+  onReportWrongKey,
+  onReportUnclear,
+}: {
+  result: ResultState;
+  freeText?: string;
+  flagged: { scoreReverted: boolean } | null;
+  onReportWrongKey?: () => void;
+  onReportUnclear: () => void;
+}): JSX.Element {
   const { evaluation, auraDelta } = result;
   const sectionRef = useRef<HTMLElement>(null);
   const doneRef = useRef<HTMLButtonElement>(null);
@@ -301,7 +386,9 @@ function ResultView({ result, freeText }: { result: ResultState; freeText?: stri
           <div>
             <dt className="faint">Aura</dt>
             {/* A change that rounds to zero is "no change", never a green "+0.0". */}
-            {Math.abs(auraDelta) < 0.05 ? (
+            {flagged?.scoreReverted ? (
+              <dd className="mono faint">Not counted</dd>
+            ) : Math.abs(auraDelta) < 0.05 ? (
               <dd className="mono faint">No change</dd>
             ) : (
               <dd className={`mono ${auraDelta > 0 ? 'tone-good' : 'tone-critical'}`}>
@@ -354,7 +441,27 @@ function ResultView({ result, freeText }: { result: ResultState; freeText?: stri
         </div>
       )}
 
-      <footer className="chal-foot chal-foot-end">
+      {flagged ? (
+        <p className="callout chal-reported">
+          Reported. {flagged.scoreReverted ? "This answer no longer counts toward your aura, and the question won't be asked again." : 'Thanks for the report.'}
+        </p>
+      ) : null}
+
+      <footer className="chal-foot">
+        {!flagged ? (
+          <span className="chal-report-links">
+            {onReportWrongKey && (
+              <button type="button" className="link-btn" onClick={onReportWrongKey}>
+                The marked answer is wrong
+              </button>
+            )}
+            <button type="button" className="link-btn" onClick={onReportUnclear}>
+              The question was unclear
+            </button>
+          </span>
+        ) : (
+          <span />
+        )}
         <button className="btn btn--primary" ref={doneRef} onClick={() => vscode.postMessage({ type: 'close' })}>
           Back to coding
         </button>

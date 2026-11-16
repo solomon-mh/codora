@@ -45,6 +45,19 @@ export interface AIEvaluationContext {
   developerAnswer: string;
 }
 
+/** A multiple-choice question put to a model blind — no answer key — to check the key it was written with. */
+export interface AIAnswerCheckContext {
+  questionPrompt: string;
+  codeSnippet: string;
+  options: { id: string; text: string }[];
+}
+
+/**
+ * The blind answer. `optionId` is the model's pick; `ambiguous` means it
+ * found no option, or more than one, defensibly correct for the code shown.
+ */
+export type AIAnswerCheck = { optionId: string; ambiguous: false } | { optionId: null; ambiguous: true };
+
 export interface AIEvaluationPayload {
   score: number;
   correct: boolean;
@@ -76,6 +89,8 @@ export interface AIProvider {
   readonly modelName: string;
   generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult>;
   evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined>;
+  /** Answer a multiple-choice question without its key, to check the key (see AnswerKeyCheck). */
+  checkAnswerKey(ctx: AIAnswerCheckContext): Promise<AIAnswerCheck | undefined>;
   /**
    * A truncated preview of the most recent raw model response — only
    * meaningful immediately after a generateQuestion/evaluateFreeText call

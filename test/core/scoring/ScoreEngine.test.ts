@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { updateRollingScore, computeAura, auraLabel } from '../../../src/core/scoring/ScoreEngine';
+import { updateRollingScore, computeAura, auraChange, auraLabel } from '../../../src/core/scoring/ScoreEngine';
 import { createDefaultRollingScores } from '../../../src/core/scoring/ScoreTypes';
 
 describe('updateRollingScore', () => {
@@ -75,6 +75,30 @@ describe('computeAura', () => {
     const aura = computeAura(scores);
     expect(aura).toBeGreaterThan(0);
     expect(aura).toBeLessThan(100);
+  });
+});
+
+describe('auraChange', () => {
+  it('shows a first wrong answer as a loss from the neutral start, not a gain from 0', () => {
+    const before = createDefaultRollingScores();
+    const after = updateRollingScore(before, 'recall', 0, 1000);
+    expect(auraChange(before, after)).toBe(-12.5);
+  });
+
+  it('shows a wrong answer in a new category as a loss even when the aura is below 37.5', () => {
+    let before = createDefaultRollingScores();
+    for (let i = 0; i < 5; i++) before = updateRollingScore(before, 'reasoning', 0, 1000 + i);
+    expect(computeAura(before)).toBeLessThan(37.5);
+    const after = updateRollingScore(before, 'debugging', 0, 2000);
+    expect(computeAura(after)).toBeGreaterThan(computeAura(before));
+    expect(auraChange(before, after)).toBeLessThan(0);
+  });
+
+  it('equals the plain before/after difference once the category has data', () => {
+    let before = createDefaultRollingScores();
+    before = updateRollingScore(before, 'recall', 1, 1000);
+    const after = updateRollingScore(before, 'recall', 0, 2000);
+    expect(auraChange(before, after)).toBeCloseTo(computeAura(after) - computeAura(before));
   });
 });
 

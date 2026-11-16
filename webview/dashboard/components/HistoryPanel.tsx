@@ -37,9 +37,15 @@ export function HistoryPanel({
               <button className="row hist-row" aria-expanded={open} onClick={() => setOpenId(open ? null : item.questionId)}>
                 <span className="row-text">
                   <span className="meta hist-meta">
-                    <span className={`sev ${item.correct ? 'tone-good' : 'tone-critical'}`}>
-                      {item.correct ? 'Correct' : 'Missed'}
-                    </span>
+                    {item.flagged ? (
+                      <span className="sev faint" title="You reported this question, so it doesn't count toward your aura.">
+                        Reported
+                      </span>
+                    ) : (
+                      <span className={`sev ${item.correct ? 'tone-good' : 'tone-critical'}`}>
+                        {item.correct ? 'Correct' : 'Missed'}
+                      </span>
+                    )}
                     <span className="cap">{item.category}</span>
                     <span className="cap">{item.difficulty}</span>
                     {item.generatedBy === 'ai' && <ModelBadge generator={item.generator} size={11} />}

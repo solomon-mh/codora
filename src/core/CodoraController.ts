@@ -9,18 +9,18 @@ import { QuestionEngine } from './questions/QuestionEngine';
 import { questionFingerprint } from './questions/questionFingerprint';
 import { DeterministicEvaluator, isShallowFreeTextAnswer, type Evaluator } from './scoring/Evaluator';
 import { HybridEvaluator } from './scoring/HybridEvaluator';
-import { updateRollingScore, computeAura } from './scoring/ScoreEngine';
+import { applyAnswer, auraChange, computeAura, replayRollingScores } from './scoring/ScoreEngine';
 import { recordChallengeCompletion, applyStreakDecay } from './scoring/StreakEngine';
 import { evaluateBadges } from './badges/BadgeEngine';
 import { tryGenerateAIQuestion } from './questions/AIQuestionGenerator';
-import { QUESTION_TYPE_TO_SCORE_CATEGORY, type ChallengeCategory, type ChallengeAnswer, type ChallengeRecord, type GeneratedQuestion } from './questions/QuestionTypes';
+import type { ChallengeCategory, ChallengeAnswer, ChallengeRecord, FlagReason, GeneratedQuestion } from './questions/QuestionTypes';
+import { dueForReview } from './questions/retention';
+import { Metrics, scoreBucket, secondsBucket } from './metrics/Metrics';
 import type { CodoraSettings } from './storage/StorageSchema';
 import { AIProviderResolver, type AIStatus } from './ai/AIProviderResolver';
 import type { AIProvider } from './ai/AITypes';
 import { getLogger } from '../utils/logger';
 
-const STALE_SUBJECT_DAYS = 3;
-const STALE_SUBJECT_MS = STALE_SUBJECT_DAYS * 24 * 60 * 60 * 1000;
 /** How many of the most recent challenges to avoid exactly repeating. */
 const RECENT_FINGERPRINT_WINDOW = 10;
 
@@ -51,6 +51,9 @@ export class CodoraController implements vscode.Disposable {
   private activeAIProviders: AIProvider[] = [];
   /** Per-provider failure reasons from the most recent generateChallenge(), surfaced in the challenge panel. */
   private lastAIFailures: { provider: string; reason?: string }[] = [];
+  /** The latest answer and the global scores just before it, so reporting that question can take its score back out. */
+  private lastSubmission: { questionId: string; globalScoresBefore: import('./scoring/ScoreTypes').RollingScoreMap } | null = null;
+  readonly metrics: Metrics;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -62,6 +65,11 @@ export class CodoraController implements vscode.Disposable {
     this.aiResolver = new AIProviderResolver(context.secrets, this.storage);
     this.questionEngine = new QuestionEngine(workspaceFolder);
     this.evaluator = new HybridEvaluator(this.deterministicEvaluator, () => this.activeAIProviders);
+    this.metrics = new Metrics(
+      context.globalState,
+      () => this.storage.getGlobalProfile().settings.metrics.enabled,
+      String(context.extension.packageJSON.version ?? '0.0.0'),
+    );
     this.sessionManager = new SessionManager(workspaceFolder, {
       onChallengeReady,
       getChallengeIntervalMs: () => resolveIntervalMs(this.storage.getGlobalProfile().settings),
@@ -71,10 +79,13 @@ export class CodoraController implements vscode.Disposable {
 
   start(): void {
     this.sessionManager.start();
+    // Counts active installs (daily/weekly actives, week-1 retention). Dropped unless opted in.
+    this.metrics.track({ name: 'activated' });
   }
 
   dispose(): void {
     this.sessionManager.dispose();
+    this.metrics.dispose();
     this.changeEmitter.dispose();
   }
 
@@ -95,6 +106,7 @@ export class CodoraController implements vscode.Disposable {
 
   async updateSettings(patch: Partial<CodoraSettings>): Promise<void> {
     await this.storage.updateGlobalProfile((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
+    if (patch.metrics) await this.metrics.setOptedIn(patch.metrics.enabled);
     this.emitChange();
   }
 
@@ -107,8 +119,11 @@ export class CodoraController implements vscode.Disposable {
     const global = this.storage.getGlobalProfile();
     const project = this.storage.getProjectData();
     const enabledCategories = global.settings.categories as ChallengeCategory[];
-    const staleSubjectFiles = this.computeStaleSubjectFiles(project.challenges);
+    const reviewDue = dueForReview(project.challenges, Date.now());
+    // At most every other challenge is a review, so new code still gets asked about.
+    const preferReview = reviewDue.length > 0 && project.challenges.at(-1)?.question.isRetentionCheck !== true;
     const recentFingerprints = this.computeRecentFingerprints(project.challenges);
+    for (const flag of project.flags) recentFingerprints.add(flag.fingerprint);
 
     // Resolved once per challenge (may prompt the user to configure an AI
     // provider) and reused for this same challenge's evaluation — this is
@@ -136,6 +151,7 @@ export class CodoraController implements vscode.Disposable {
         reason = 'nothing is configured and nothing is available via VS Code';
       }
       getLogger().warn(`No AI provider will be tried this challenge: ${reason}`);
+      this.metrics.track({ name: 'no_question', reason: 'no_provider' });
     }
 
     // Reset per challenge: these are the reasons *this* attempt failed, and
@@ -144,15 +160,18 @@ export class CodoraController implements vscode.Disposable {
     const question = await this.questionEngine.generateChallenge({
       enabledCategories,
       categoryScores: global.categoryScores,
-      staleSubjectFiles,
+      reviewDue,
+      preferReview,
       recentFingerprints,
       aiProviders: this.activeAIProviders,
       onProviderFailure: (provider, reason) => this.lastAIFailures.push({ provider, reason }),
+      onQuestionRejected: (verdict) => this.metrics.track({ name: 'question_rejected', verdict }),
     });
 
     this.pendingQuestion = question ?? null;
     if (!question) {
       getLogger().info('Challenge skipped: no AI provider produced a question');
+      if (this.activeAIProviders.length > 0) this.metrics.track({ name: 'no_question', reason: 'all_failed' });
     }
     return question;
   }
@@ -187,10 +206,8 @@ export class CodoraController implements vscode.Disposable {
 
     const evaluation = await this.evaluator.evaluate(question, answer);
     const now = Date.now();
-    const scoreCategory = QUESTION_TYPE_TO_SCORE_CATEGORY[question.type];
 
     const globalBefore = this.storage.getGlobalProfile();
-    const auraBefore = computeAura(globalBefore.categoryScores);
 
     const record: ChallengeRecord = { question, answer, evaluation };
 
@@ -198,7 +215,7 @@ export class CodoraController implements vscode.Disposable {
       // Snapshot the scores *after* this answer lands. Computing the aura from
       // project.categoryScores here would read the pre-update map and leave the
       // project's history permanently one answer behind.
-      const categoryScores = updateRollingScore(project.categoryScores, scoreCategory, evaluation.score, now);
+      const categoryScores = applyAnswer(project.categoryScores, question, evaluation.score, now);
       return {
         ...project,
         challenges: [...project.challenges, record],
@@ -210,7 +227,7 @@ export class CodoraController implements vscode.Disposable {
     const global = await this.storage.updateGlobalProfile((profile) => {
       const decayedStreak = applyStreakDecay(profile.streak, now);
       const streak = evaluation.correct ? recordChallengeCompletion(decayedStreak, now) : decayedStreak;
-      const categoryScores = updateRollingScore(profile.categoryScores, scoreCategory, evaluation.score, now);
+      const categoryScores = applyAnswer(profile.categoryScores, question, evaluation.score, now);
       const auraHistory = appendAuraSnapshot(profile.auraHistory, computeAura(categoryScores), now);
       return { ...profile, streak, categoryScores, auraHistory };
     });
@@ -221,8 +238,17 @@ export class CodoraController implements vscode.Disposable {
       await this.storage.updateGlobalProfile((p) => ({ ...p, badges: [...p.badges, ...newBadges] }));
     }
 
-    const auraAfter = computeAura(this.storage.getGlobalProfile().categoryScores);
-    const auraDelta = auraAfter - auraBefore;
+    const auraDelta = auraChange(globalBefore.categoryScores, this.storage.getGlobalProfile().categoryScores);
+    this.lastSubmission = { questionId: question.id, globalScoresBefore: globalBefore.categoryScores };
+    this.metrics.track({
+      name: 'answered',
+      kind: question.body.kind,
+      correct: evaluation.correct,
+      scoreBucket: scoreBucket(evaluation.score),
+      secondsBucket: secondsBucket(answer.timeTakenMs),
+      review: question.isRetentionCheck,
+    });
+    void this.maybeAskToShareMetrics();
 
     let followUp: GeneratedQuestion | undefined;
     if (!question.followUpToChallengeId && isShallowFreeTextAnswer(question, answer)) {
@@ -270,19 +296,59 @@ export class CodoraController implements vscode.Disposable {
     return undefined;
   }
 
-  private computeStaleSubjectFiles(challenges: ChallengeRecord[]): Set<string> {
+
+  /**
+   * The developer reports a question. Before it's answered, it's set aside
+   * and its subject avoided. After it's answered (the result screen), the
+   * answer is taken back out of every score: the project's scores are
+   * replayed without it, and the global scores return to what they were
+   * just before it — only possible for the latest answer, which is the only
+   * one the result screen can report.
+   */
+  async flagQuestion(questionId: string, reason: FlagReason): Promise<{ scoreReverted: boolean }> {
     const now = Date.now();
-    const lastSeen = new Map<string, number>();
-    for (const c of challenges) {
-      for (const file of c.question.provenance.sourceFiles) {
-        lastSeen.set(file, Math.max(lastSeen.get(file) ?? 0, c.answer.answeredAt));
-      }
+    const pending = this.pendingQuestion;
+    if (pending && pending.id === questionId) {
+      const fingerprint = questionFingerprint(pending.type, pending.provenance.sourceFiles[0] ?? '', pending.provenance.subjectFunction);
+      await this.storage.updateProjectData((p) => ({ ...p, flags: [...p.flags, { fingerprint, reason, at: now }] }));
+      this.pendingQuestion = null;
+      this.metrics.track({ name: 'flagged', reason, answered: false });
+      this.emitChange();
+      return { scoreReverted: false };
     }
-    const stale = new Set<string>();
-    for (const [file, ts] of lastSeen) {
-      if (now - ts >= STALE_SUBJECT_MS) stale.add(file);
+
+    const last = this.lastSubmission;
+    if (!last || last.questionId !== questionId) return { scoreReverted: false };
+
+    await this.storage.updateProjectData((p) => {
+      const challenges = p.challenges.map((c) => (c.question.id === questionId ? { ...c, flagged: reason } : c));
+      const categoryScores = replayRollingScores(challenges);
+      return { ...p, challenges, categoryScores, auraHistory: appendAuraSnapshot(p.auraHistory, computeAura(categoryScores), now) };
+    });
+    await this.storage.updateGlobalProfile((p) => ({
+      ...p,
+      categoryScores: last.globalScoresBefore,
+      auraHistory: appendAuraSnapshot(p.auraHistory, computeAura(last.globalScoresBefore), now),
+    }));
+    this.lastSubmission = null;
+    this.metrics.track({ name: 'flagged', reason, answered: true });
+    this.emitChange();
+    return { scoreReverted: true };
+  }
+
+  /** Asks once, after the first answer — the earliest moment the question makes sense. */
+  private async maybeAskToShareMetrics(): Promise<void> {
+    const settings = this.storage.getGlobalProfile().settings;
+    if (settings.metrics.prompted) return;
+    await this.updateSettings({ metrics: { ...settings.metrics, prompted: true } });
+    const choice = await vscode.window.showInformationMessage(
+      'Help improve Codora? Share anonymous usage counts — never your code, file names, questions or answers. You can change this any time in Settings.',
+      'Share anonymous counts',
+      'No thanks',
+    );
+    if (choice === 'Share anonymous counts') {
+      await this.updateSettings({ metrics: { enabled: true, prompted: true } });
     }
-    return stale;
   }
 
   private computeRecentFingerprints(challenges: ChallengeRecord[]): Set<string> {

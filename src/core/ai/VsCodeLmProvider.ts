@@ -1,16 +1,8 @@
 import * as vscode from 'vscode';
-import { buildEvaluationPrompt, buildGenerationPrompt } from './prompts';
-import { extractJsonObject, validateEvaluationPayload, validateGenerationPayload } from './parseAIResponse';
 import { pickPreferredModel } from './pickPreferredModel';
 import { inferVendor } from './AIIdentity';
 import { BaseAIProvider } from './BaseAIProvider';
-import type {
-  AIEvaluationContext,
-  AIEvaluationPayload,
-  AIGenerationResult,
-  AIProvider,
-  AIQuestionContext,
-} from './AITypes';
+import type { AIProvider } from './AITypes';
 import type { AIVendor } from './AIIdentity';
 import { getLogger } from '../../utils/logger';
 
@@ -81,27 +73,11 @@ export class VsCodeLmProvider extends BaseAIProvider implements AIProvider {
     }
   }
 
-  async generateQuestion(ctx: AIQuestionContext): Promise<AIGenerationResult> {
-    const { system, user } = buildGenerationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return { outcome: 'unusable' };
-    return validateGenerationPayload(extractJsonObject(text));
-  }
-
-  async evaluateFreeText(ctx: AIEvaluationContext): Promise<AIEvaluationPayload | undefined> {
-    const { system, user } = buildEvaluationPrompt(ctx);
-    const text = await this.send(system, user);
-    this.recordRawResponse(text);
-    if (!text) return undefined;
-    return validateEvaluationPayload(extractJsonObject(text));
-  }
-
   // Deliberately no catch-and-swallow around sendRequest here: callers
   // (tryGenerateAIQuestion, HybridEvaluator) need the real error — e.g.
   // LanguageModelError.NoPermissions vs a timeout are very different
   // problems, and a generic "request failed" makes them indistinguishable.
-  private async send(system: string, user: string): Promise<string | undefined> {
+  protected async send(system: string, user: string): Promise<string | undefined> {
     // The Language Model API has no distinct system-role message, so the
     // instructions and the task are combined into one user message with
     // clear section markers.
