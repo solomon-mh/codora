@@ -46,7 +46,9 @@ export async function tryGenerateAIQuestion(
 ): Promise<GeneratedQuestion | undefined> {
   // Redacted here, once: this snippet is what every model call (question,
   // answer-key check, grading, follow-up) sends, and what is stored.
-  const codeSnippet = redactSecrets((candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim());
+  // Redacted *before* the cut, so a key split by the cut can't slip past
+  // a pattern that only matches it whole.
+  const codeSnippet = redactSecrets(candidate.fn?.body ?? candidate.file.text).slice(0, MAX_SNIPPET_CHARS).trim();
   if (!codeSnippet) return undefined;
 
   let result;
